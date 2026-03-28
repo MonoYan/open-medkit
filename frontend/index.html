@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenMedKit - AI-Powered Personal Medicine Manager</title>
+    <link rel="icon" type="image/png" href="/medkit-icon-rounded.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;600&family=DM+Mono:ital,wght@0,300;0,400;1,300&family=Fraunces:ital,opsz,wght@0,9..144,300;1,9..144,200&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      (function () {
+        var storageKey = 'medkit_settings';
+        var root = document.documentElement;
+
+        try {
+          var raw = localStorage.getItem(storageKey);
+          var parsed = raw ? JSON.parse(raw) : {};
+          var preference = parsed && parsed.themePreference ? parsed.themePreference : 'system';
+          var systemDark =
+            typeof window.matchMedia === 'function' &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var resolved = preference === 'system' ? (systemDark ? 'dark' : 'light') : preference;
+
+          root.dataset.theme = resolved;
+          if (resolved === 'dark') {
+            root.classList.add('dark');
+          }
+          root.style.colorScheme = resolved;
+        } catch (_) {}
+      })();
+    </script>
+  </head>
+  <body class="bg-bg text-ink">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
