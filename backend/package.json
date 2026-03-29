@@ -4,13 +4,16 @@
   "type": "commonjs",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsup src/index.ts --format cjs --dts",
-    "start": "node dist/index.js"
+    "build": "tsup src/index.ts src/mcp-server.ts --format cjs --dts",
+    "start": "node dist/index.js",
+    "mcp": "tsx src/mcp-server.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.8",
+    "@modelcontextprotocol/sdk": "^1.28.0",
     "better-sqlite3": "^11.8.1",
-    "hono": "^4.7.7"
+    "hono": "^4.7.7",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",

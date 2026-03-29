@@ -34,6 +34,10 @@ Thumbs.db
 .idea/
 .vscode/
 
+# MCP local config
+.mcp.json
+.claude
+
 # Local tooling history / caches
 .history/
 coverage/
