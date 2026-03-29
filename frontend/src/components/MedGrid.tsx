@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LayoutGrid, List, Pencil, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { LayoutGrid, List, Pencil, RefreshCw, RotateCcw, Search, Trash2 } from 'lucide-react';
 
 import type { Medicine, MedicineFilterStatus, Stats } from '../types';
 import { formatDate, getMedicineStatus, getStatusText, daysUntilExpiry } from '../lib/utils';
@@ -26,6 +26,7 @@ interface MedGridProps {
   onOpenMedicine: (medicine: Medicine) => void;
   onEditMedicine: (medicine: Medicine) => void;
   onDeleteMedicine: (medicine: Medicine) => void;
+  onRefresh: () => void;
 }
 
 export function MedGrid({
@@ -44,7 +45,9 @@ export function MedGrid({
   onOpenMedicine,
   onEditMedicine,
   onDeleteMedicine,
+  onRefresh,
 }: MedGridProps) {
+  const [refreshing, setRefreshing] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>('expires');
   const [viewMode, setViewMode] = useState<ViewMode>(defaultViewMode);
   const activeQuery = searchQuery.trim();
@@ -134,8 +137,21 @@ export function MedGrid({
               </div>
             </div>
 
-            {/* Right: View toggle + sort */}
+            {/* Right: Refresh + View toggle + sort */}
             <div className="flex shrink-0 items-center gap-2.5">
+              <button
+                type="button"
+                title="刷新列表"
+                disabled={refreshing}
+                onClick={async () => {
+                  setRefreshing(true);
+                  try { await onRefresh(); } finally { setRefreshing(false); }
+                }}
+                className="rounded-full border border-border/60 p-1.5 text-ink3 transition-all duration-200 hover:bg-surface4 hover:text-ink active:scale-95 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} strokeWidth={2} />
+              </button>
+
               <div className="flex rounded-full border border-border/60 bg-transparent p-0.5">
                 <button
                   type="button"

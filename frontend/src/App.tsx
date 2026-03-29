@@ -260,6 +260,7 @@ export default function App() {
                     setAddModalOpen(true);
                   }}
                   onDeleteMedicine={handleDelete}
+                  onRefresh={refresh}
                 />
               </div>
             </div>
