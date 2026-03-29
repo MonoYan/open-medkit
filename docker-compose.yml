@@ -10,6 +10,7 @@ services:
       - AI_API_KEY=${AI_API_KEY:-}
       - AI_BASE_URL=${AI_BASE_URL:-https://api.openai.com}
       - AI_MODEL=${AI_MODEL:-gpt-4o-mini}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
     restart: unless-stopped
 
 volumes:
