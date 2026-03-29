@@ -6,7 +6,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsup src/index.ts src/mcp-server.ts --format cjs --dts",
     "start": "node dist/index.js",
-    "mcp": "tsx src/mcp-server.ts"
+    "mcp": "tsx src/mcp-server.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.8",
@@ -20,6 +22,7 @@
     "@types/node": "^22.13.10",
     "tsup": "^8.4.0",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vitest": "^4.1.2"
   }
 }
