@@ -62,6 +62,61 @@ function getMergedCategories() {
   return merged;
 }
 
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  '感冒发烧': [
+    '布洛芬', '对乙酰氨基酚', '扑热息痛', '感冒', '退烧', '发烧', '头痛', '止痛',
+    '阿司匹林', '泰诺', '美林', '连花清瘟', '板蓝根', '感康', '新康泰克', '白加黑',
+    '快克', '抗病毒', '咳嗽', '止咳', '化痰', '川贝', '枇杷', '右美沙芬',
+    'ibuprofen', 'paracetamol', 'acetaminophen', 'aspirin',
+  ],
+  '外伤处理': [
+    '创可贴', '碘伏', '酒精', '消毒', '纱布', '绷带', '棉签', '红药水', '紫药水',
+    '云南白药', '止血', '伤口', '碘酒', '双氧水', '医用胶带',
+    'band-aid', 'bandage', 'iodine',
+  ],
+  '慢性病用药': [
+    '降压', '降糖', '胰岛素', '二甲双胍', '高血压', '糖尿病', '心血管',
+    '他汀', '阿托伐', '硝苯地平', '氨氯地平', '缬沙坦', '降脂',
+    '甲状腺', '优甲乐', '左甲状腺',
+  ],
+  '维生素补剂': [
+    '维生素', '维C', '维B', '钙片', '鱼油', 'DHA', '补铁', '叶酸', '泡腾片',
+    '补锌', '多维', '善存', '钙尔奇', 'vitamin', '辅酶Q10', '褪黑素',
+  ],
+  '皮肤外用': [
+    '药膏', '软膏', '乳膏', '凝胶', '皮炎', '湿疹', '止痒',
+    '红霉素软膏', '百多邦', '派瑞松', '炉甘石', '芦荟胶', '痤疮', '脚气',
+    '达克宁', '皮康王', '风油精', '花露水', '防晒',
+  ],
+  '消化系统': [
+    '藿香正气', '健胃消食', '消化', '胃痛', '拉肚子', '腹泻', '便秘', '开塞露',
+    '蒙脱石', '益生菌', '肠胃', '奥美拉唑', '吗丁啉', '胃药', '止泻',
+    '乳酸菌', '整肠', '泻药',
+  ],
+};
+
+function inferCategory(name: string, usageDesc?: string): string {
+  const text = `${name} ${usageDesc || ''}`.toLowerCase();
+
+  let bestCategory = '';
+  let bestScore = 0;
+
+  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    let score = 0;
+    for (const kw of keywords) {
+      if (text.includes(kw.toLowerCase())) {
+        score += 1;
+      }
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestCategory = category;
+    }
+  }
+
+  return bestCategory;
+}
+
 function computeStats(expiringDays = 30) {
   const db = getDb();
   const { todayStr, warningDateStr } = getDateBoundaries(expiringDays);
@@ -195,14 +250,17 @@ server.tool(
 
 server.tool(
   'add_medicine',
-  'Add a new medicine to the medkit. Only "name" is required; all other fields are optional.',
+  `Add a new medicine to the medkit. Only "name" is required; all other fields are optional.
+IMPORTANT: Always provide "category" when possible. Available categories: ${DEFAULT_CATEGORIES.join('、')}.
+If category is omitted, the system will attempt to auto-classify based on the medicine name and usage description.
+Also try to fill in name_en, spec, usage_desc, and other fields for better data quality.`,
   {
     name: z.string().trim().min(1, 'Medicine name is required').describe('Medicine name (required)'),
     name_en: z.string().optional().describe('English name'),
     spec: z.string().optional().describe('Specification, e.g. 300mg/粒'),
     quantity: z.string().optional().describe('Remaining quantity, e.g. 20粒'),
     expires_at: z.string().optional().describe('Expiry date in YYYY-MM-DD format'),
-    category: z.string().optional().describe('Category, e.g. 感冒发烧, 外伤处理'),
+    category: z.string().optional().describe(`Category. Choose from: ${DEFAULT_CATEGORIES.join(', ')}. Or create a new reasonable category if none fits.`),
     usage_desc: z.string().optional().describe('Usage description / indications'),
     location: z.string().optional().describe('Storage location, e.g. 药箱 A层'),
     notes: z.string().optional().describe('Additional notes'),
@@ -210,6 +268,15 @@ server.tool(
   async (params) => {
     try {
       const db = getDb();
+      let category = params.category?.trim() || null;
+
+      if (!category) {
+        const inferred = inferCategory(params.name, params.usage_desc);
+        if (inferred) {
+          category = inferred;
+        }
+      }
+
       const result = db
         .prepare(
           `INSERT INTO medicines (name, name_en, spec, quantity, expires_at, category, usage_desc, location, notes)
@@ -221,7 +288,7 @@ server.tool(
           params.spec?.trim() || null,
           params.quantity?.trim() || null,
           params.expires_at?.trim() || null,
-          params.category?.trim() || null,
+          category,
           params.usage_desc?.trim() || null,
           params.location?.trim() || null,
           params.notes?.trim() || null,
