@@ -112,6 +112,7 @@ All AI config can also be set in the browser Settings panel. Values entered ther
 | `AI_MODEL` | `gpt-4o-mini` | Model name |
 | `PORT` | `3000` | Server port |
 | `DB_PATH` | `./data/medicine.db` | SQLite database path |
+| `HTTPS_PROXY` | — | HTTP(S) proxy for outbound requests (Telegram / Discord / Lark API, etc.) |
 
 ## Privacy & Safety
 
