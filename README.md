@@ -36,9 +36,9 @@ Open MedKit 让你用**一句话**把药品录入药箱，用**一句话**从药
 | **说一句话就入库** | 自然语言描述药品 → AI 提取名称、规格、有效期等全部字段，确认即入库 |
 | **换行分隔批量录** | 多条药品换行粘贴，一键批量解析，适合首次整理一整箱药 |
 | **问一句话就找药** | 「有退烧药吗」「快过期的有哪些」—— 像聊天一样检索药箱 |
-| **过期自动提醒** | 到期 / 即将到期药品自动标记高亮，支持 Telegram 每日推送 |
+| **过期自动提醒** | 到期 / 即将到期药品自动标记高亮，支持 Telegram / Discord / 飞书每日推送 |
 | **Agent 原生接入** | 内置 [MCP Server](./MCP.md)，Claude Code / Cursor / Claude Desktop / OpenClaw 直接调用 tool 管理药箱 |
-| **一行命令自部署** | `docker compose up -d`，药箱数据默认保存在本地 SQLite；启用 AI/Telegram 时仅与对应服务通信 |
+| **一行命令自部署** | `docker compose up -d`，药箱数据默认保存在本地 SQLite；启用 AI 或通知时仅与对应服务通信 |
 | **兼容任意 AI** | OpenAI、Deepseek、Ollama…… 任何兼容 `/v1/chat/completions` 的 API 均可 |
 
 ### See it in action
@@ -119,7 +119,7 @@ All AI config can also be set in the browser Settings panel. Values entered ther
 - AI parse, image recognition, and chat features send the submitted text or image to the OpenAI-compatible endpoint you configure.
 - AI chat also sends the current medicine inventory needed to answer your question, so avoid entering data you do not want to share with that model provider.
 - Browser-level AI settings such as `AI_API_KEY`, base URL, and model name are stored in the current browser's `localStorage`.
-- Telegram reminders send medicine names, expiry dates, and reminder text to Telegram once that channel is enabled.
+- Notification reminders (Telegram / Discord / Lark(Feishu)) send medicine names, expiry dates, and reminder text to the corresponding platform once that channel is enabled.
 - Open MedKit is for household inventory organization only and does not provide diagnosis, prescribing, or individualized medication advice.
 
 ## Deployment
@@ -178,7 +178,7 @@ open-medkit/
 │       ├── ai/        # AI client, prompts, parsing logic
 │       ├── db/        # SQLite schema & client
 │       ├── routes/    # REST API routes
-│       ├── services/  # Notification scheduler
+│       ├── services/  # Telegram, Discord, Lark(Feishu) & notification scheduler
 │       ├── middleware/ # API key injection
 │       └── mcp-server.ts  # MCP server (stdio transport)
 ├── frontend/          # React SPA

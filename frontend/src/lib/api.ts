@@ -665,3 +665,55 @@ export async function testNotificationChannel(type: string) {
   );
   return payload.data;
 }
+
+// Discord
+
+export async function verifyDiscordWebhook(webhookUrl: string) {
+  const payload = await request<{ data: { name: string } }>(
+    '/notifications/channels/discord/verify',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhookUrl }),
+    },
+  );
+  return payload.data;
+}
+
+export async function saveDiscordWebhook(webhookUrl: string) {
+  const payload = await request<{ data: { saved: boolean; name: string } }>(
+    '/notifications/channels/discord/save',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhookUrl }),
+    },
+  );
+  return payload.data;
+}
+
+// Feishu
+
+export async function verifyFeishuWebhook(webhookUrl: string, secret?: string) {
+  const payload = await request<{ data: { ok: boolean } }>(
+    '/notifications/channels/feishu/verify',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhookUrl, ...(secret ? { secret } : {}) }),
+    },
+  );
+  return payload.data;
+}
+
+export async function saveFeishuWebhook(webhookUrl: string, secret?: string) {
+  const payload = await request<{ data: { saved: boolean } }>(
+    '/notifications/channels/feishu/save',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhookUrl, ...(secret ? { secret } : {}) }),
+    },
+  );
+  return payload.data;
+}

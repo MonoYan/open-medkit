@@ -17,6 +17,18 @@ vi.mock('../services/telegram', () => ({
   getUpdates: vi.fn().mockResolvedValue([]),
 }));
 
+vi.mock('../services/discord', () => ({
+  verifyWebhook: vi.fn().mockResolvedValue({ name: 'test-webhook' }),
+  sendWebhook: vi.fn().mockResolvedValue(undefined),
+  isValidWebhookUrl: vi.fn().mockReturnValue(true),
+}));
+
+vi.mock('../services/feishu', () => ({
+  verifyWebhook: vi.fn().mockResolvedValue({ ok: true }),
+  sendWebhook: vi.fn().mockResolvedValue(undefined),
+  isValidWebhookUrl: vi.fn().mockReturnValue(true),
+}));
+
 vi.mock('../services/notifier', async (importOriginal) => {
   const original = await importOriginal<typeof import('../services/notifier')>();
   return {
@@ -182,5 +194,139 @@ describe('POST /api/notifications/channels/:type/test', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data.message).toBeDefined();
+  });
+});
+
+// -- Discord routes --
+
+describe('POST /api/notifications/channels/discord/verify', () => {
+  it('returns 400 when webhookUrl is missing', async () => {
+    const app = createApp();
+    const res = await app.request('/api/notifications/channels/discord/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns webhook name on success', async () => {
+    const app = createApp();
+    const res = await app.request('/api/notifications/channels/discord/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhookUrl: 'https://discord.com/api/webhooks/123/abc' }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.name).toBe('test-webhook');
+  });
+});
+
+describe('POST /api/notifications/channels/discord/save', () => {
+  it('creates discord channel on save', async () => {
+    const app = createApp();
+    const res = await app.request('/api/notifications/channels/discord/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhookUrl: 'https://discord.com/api/webhooks/123/abc' }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.saved).toBe(true);
+    expect(body.data.name).toBe('test-webhook');
+
+    const row = testDb
+      .prepare('SELECT * FROM notification_channels WHERE channel_type = ?')
+      .get('discord') as { enabled: number } | undefined;
+    expect(row).toBeDefined();
+    expect(row!.enabled).toBe(1);
+  });
+});
+
+// -- Feishu routes --
+
+describe('POST /api/notifications/channels/feishu/verify', () => {
+  it('returns 400 when webhookUrl is missing', async () => {
+    const app = createApp();
+    const res = await app.request('/api/notifications/channels/feishu/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns ok on success', async () => {
+    const app = createApp();
+    const res = await app.request('/api/notifications/channels/feishu/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhookUrl: 'https://open.feishu.cn/open-apis/bot/v2/hook/abc' }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.ok).toBe(true);
+  });
+});
+
+describe('POST /api/notifications/channels/feishu/save', () => {
+  it('creates feishu channel on save', async () => {
+    const app = createApp();
+    const res = await app.request('/api/notifications/channels/feishu/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        webhookUrl: 'https://open.feishu.cn/open-apis/bot/v2/hook/abc',
+        secret: 'mysecret',
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.saved).toBe(true);
+
+    const row = testDb
+      .prepare('SELECT * FROM notification_channels WHERE channel_type = ?')
+      .get('feishu') as { enabled: number; config: string } | undefined;
+    expect(row).toBeDefined();
+    expect(row!.enabled).toBe(1);
+    const config = JSON.parse(row!.config);
+    expect(config.secret).toBe('mysecret');
+  });
+});
+
+describe('sanitizeChannel masks webhook URLs and secrets', () => {
+  it('masks discord webhookUrl', async () => {
+    testDb
+      .prepare(
+        `INSERT INTO notification_channels (channel_type, enabled, config)
+         VALUES (?, ?, ?)`,
+      )
+      .run('discord', 1, JSON.stringify({ webhookUrl: 'https://discord.com/api/webhooks/123456789/very-long-token-here' }));
+
+    const app = createApp();
+    const res = await app.request('/api/notifications/channels');
+    const body = await res.json();
+    const dc = body.data.find((ch: { channel_type: string }) => ch.channel_type === 'discord');
+    expect(dc).toBeDefined();
+    expect(dc.config.webhookUrl).toContain('...');
+    expect(dc.config.webhookUrl).not.toBe('https://discord.com/api/webhooks/123456789/very-long-token-here');
+  });
+
+  it('masks feishu secret', async () => {
+    testDb
+      .prepare(
+        `INSERT INTO notification_channels (channel_type, enabled, config)
+         VALUES (?, ?, ?)`,
+      )
+      .run('feishu', 1, JSON.stringify({ webhookUrl: 'https://open.feishu.cn/open-apis/bot/v2/hook/abc', secret: 'top-secret' }));
+
+    const app = createApp();
+    const res = await app.request('/api/notifications/channels');
+    const body = await res.json();
+    const fs = body.data.find((ch: { channel_type: string }) => ch.channel_type === 'feishu');
+    expect(fs).toBeDefined();
+    expect(fs.config.secret).toBe('***');
+    expect(fs.config.webhookUrl).toContain('...');
   });
 });

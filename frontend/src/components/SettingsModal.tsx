@@ -17,12 +17,22 @@ import {
   getNotificationChannels,
   importMedicines,
   linkTelegram,
+  saveDiscordWebhook,
+  saveFeishuWebhook,
   testAiConnection,
   testNotificationChannel,
   updateNotificationChannel,
+  verifyDiscordWebhook,
+  verifyFeishuWebhook,
   verifyTelegramBot,
 } from '../lib/api';
-import type { NotificationChannel, Settings, TelegramChannelConfig } from '../types';
+import type {
+  DiscordChannelConfig,
+  FeishuChannelConfig,
+  NotificationChannel,
+  Settings,
+  TelegramChannelConfig,
+} from '../types';
 import { DismissibleNotice } from './DismissibleNotice';
 
 const homeTabOptions = [
@@ -49,11 +59,12 @@ const themeOptions = [
 const reminderDayOptions = [7, 15, 30, 60] as const;
 const notifyHourOptions = Array.from({ length: 24 }, (_, i) => i);
 type SettingsTab = 'ai' | 'general' | 'notifications' | 'about';
+type NotifyChannel = 'telegram' | 'discord' | 'feishu';
 
 const tabDescriptions: Record<SettingsTab, string> = {
   ai: '配置 AI 服务地址、模型和回答风格。留空时优先使用服务端 .env 中的默认值。',
   general: '调整界面主题、默认进入页面、列表样式和数据管理选项。',
-  notifications: '管理 Telegram 提醒频道与每日过期通知的发送时间。',
+  notifications: '管理 Telegram、Discord、飞书等提醒渠道与每日过期通知的发送时间。',
   about: '简要说明产品用途，并提示使用风险与免责声明。',
 };
 
@@ -94,6 +105,7 @@ export function SettingsModal({
     'theme-input w-full rounded-[10px] border px-3 py-2 text-[13px] outline-none transition';
   const [form, setForm] = useState(settings);
   const [activeTab, setActiveTab] = useState<SettingsTab>('ai');
+  const [activeNotifyChannel, setActiveNotifyChannel] = useState<NotifyChannel>('telegram');
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -114,9 +126,34 @@ export function SettingsModal({
   const [tgError, setTgError] = useState('');
   const linkAbortRef = useRef<AbortController | null>(null);
 
-  const loadTelegramChannel = useCallback(async () => {
+  // Discord notification state
+  const [dcChannel, setDcChannel] = useState<NotificationChannel | null>(null);
+  const [dcWebhookUrl, setDcWebhookUrl] = useState('');
+  const [dcVerifying, setDcVerifying] = useState(false);
+  const [dcSaving, setDcSaving] = useState(false);
+  const [dcTestingSend, setDcTestingSend] = useState(false);
+  const [dcNotifyHour, setDcNotifyHour] = useState(9);
+  const [dcEnabled, setDcEnabled] = useState(false);
+  const [dcName, setDcName] = useState('');
+  const [dcStatus, setDcStatus] = useState('');
+  const [dcError, setDcError] = useState('');
+
+  // Feishu notification state
+  const [fsChannel, setFsChannel] = useState<NotificationChannel | null>(null);
+  const [fsWebhookUrl, setFsWebhookUrl] = useState('');
+  const [fsSecret, setFsSecret] = useState('');
+  const [fsVerifying, setFsVerifying] = useState(false);
+  const [fsSaving, setFsSaving] = useState(false);
+  const [fsTestingSend, setFsTestingSend] = useState(false);
+  const [fsNotifyHour, setFsNotifyHour] = useState(9);
+  const [fsEnabled, setFsEnabled] = useState(false);
+  const [fsStatus, setFsStatus] = useState('');
+  const [fsError, setFsError] = useState('');
+
+  const loadChannels = useCallback(async () => {
     try {
       const channels = await getNotificationChannels();
+
       const tg = channels.find((ch) => ch.channel_type === 'telegram') || null;
       setTgChannel(tg);
       if (tg) {
@@ -128,6 +165,29 @@ export function SettingsModal({
         setTgBotUsername('');
         setTgNotifyHour(9);
         setTgEnabled(false);
+      }
+
+      const dc = channels.find((ch) => ch.channel_type === 'discord') || null;
+      setDcChannel(dc);
+      if (dc) {
+        const cfg = dc.config as DiscordChannelConfig;
+        setDcName(cfg.name || '');
+        setDcNotifyHour(dc.notify_hour);
+        setDcEnabled(dc.enabled);
+      } else {
+        setDcName('');
+        setDcNotifyHour(9);
+        setDcEnabled(false);
+      }
+
+      const fs = channels.find((ch) => ch.channel_type === 'feishu') || null;
+      setFsChannel(fs);
+      if (fs) {
+        setFsNotifyHour(fs.notify_hour);
+        setFsEnabled(fs.enabled);
+      } else {
+        setFsNotifyHour(9);
+        setFsEnabled(false);
       }
     } catch {
       // silently ignore on initial load
@@ -146,12 +206,25 @@ export function SettingsModal({
       setTgVerifying(false);
       setTgLinking(false);
       setTgTestingSend(false);
-      void loadTelegramChannel();
+      setDcStatus('');
+      setDcError('');
+      setDcWebhookUrl('');
+      setDcVerifying(false);
+      setDcSaving(false);
+      setDcTestingSend(false);
+      setFsStatus('');
+      setFsError('');
+      setFsWebhookUrl('');
+      setFsSecret('');
+      setFsVerifying(false);
+      setFsSaving(false);
+      setFsTestingSend(false);
+      void loadChannels();
     }
     return () => {
       linkAbortRef.current?.abort();
     };
-  }, [open, settings, loadTelegramChannel]);
+  }, [open, settings, loadChannels]);
 
   useEffect(() => {
     if (open) {
@@ -259,7 +332,7 @@ export function SettingsModal({
       const result = await linkTelegram(tgBotToken.trim(), controller.signal);
       if (result.linked) {
         setTgStatus(`绑定成功！Chat ID: ${result.chatId}`);
-        await loadTelegramChannel();
+        await loadChannels();
       } else {
         setTgStatus('');
         setTgError('30 秒内未收到 /start 消息，请重试。');
@@ -319,6 +392,181 @@ export function SettingsModal({
       setTgError(err instanceof Error ? err.message : '发送测试失败');
     } finally {
       setTgTestingSend(false);
+    }
+  };
+
+  // -- Discord handlers --
+
+  const handleDcVerify = async () => {
+    if (!dcWebhookUrl.trim()) {
+      setDcError('请输入 Webhook URL');
+      return;
+    }
+    setDcVerifying(true);
+    setDcError('');
+    setDcStatus('');
+    try {
+      const result = await verifyDiscordWebhook(dcWebhookUrl.trim());
+      setDcName(result.name);
+      setDcStatus(`Webhook 有效：${result.name}`);
+    } catch (err) {
+      setDcError(err instanceof Error ? err.message : '验证失败');
+    } finally {
+      setDcVerifying(false);
+    }
+  };
+
+  const handleDcSave = async () => {
+    if (!dcWebhookUrl.trim()) {
+      setDcError('请输入 Webhook URL');
+      return;
+    }
+    setDcSaving(true);
+    setDcError('');
+    setDcStatus('');
+    try {
+      const result = await saveDiscordWebhook(dcWebhookUrl.trim());
+      setDcStatus(`已保存并启用：${result.name}`);
+      setDcName(result.name);
+      await loadChannels();
+    } catch (err) {
+      setDcError(err instanceof Error ? err.message : '保存失败');
+    } finally {
+      setDcSaving(false);
+    }
+  };
+
+  const handleDcUnlink = async () => {
+    setDcError('');
+    setDcStatus('');
+    try {
+      await deleteNotificationChannel('discord');
+      setDcChannel(null);
+      setDcName('');
+      setDcEnabled(false);
+      setDcStatus('已解除绑定');
+    } catch (err) {
+      setDcError(err instanceof Error ? err.message : '解绑失败');
+    }
+  };
+
+  const handleDcToggle = async (enabled: boolean) => {
+    setDcError('');
+    try {
+      await updateNotificationChannel('discord', { enabled });
+      setDcEnabled(enabled);
+    } catch (err) {
+      setDcError(err instanceof Error ? err.message : '更新失败');
+    }
+  };
+
+  const handleDcHourChange = async (hour: number) => {
+    setDcError('');
+    setDcNotifyHour(hour);
+    try {
+      await updateNotificationChannel('discord', { notify_hour: hour });
+    } catch (err) {
+      setDcError(err instanceof Error ? err.message : '更新失败');
+    }
+  };
+
+  const handleDcTest = async () => {
+    setDcTestingSend(true);
+    setDcError('');
+    setDcStatus('');
+    try {
+      const result = await testNotificationChannel('discord');
+      setDcStatus(result.message);
+    } catch (err) {
+      setDcError(err instanceof Error ? err.message : '发送测试失败');
+    } finally {
+      setDcTestingSend(false);
+    }
+  };
+
+  // -- Feishu handlers --
+
+  const handleFsVerify = async () => {
+    if (!fsWebhookUrl.trim()) {
+      setFsError('请输入 Webhook URL');
+      return;
+    }
+    setFsVerifying(true);
+    setFsError('');
+    setFsStatus('');
+    try {
+      await verifyFeishuWebhook(fsWebhookUrl.trim(), fsSecret.trim() || undefined);
+      setFsStatus('Webhook 验证成功（已发送测试消息）');
+    } catch (err) {
+      setFsError(err instanceof Error ? err.message : '验证失败');
+    } finally {
+      setFsVerifying(false);
+    }
+  };
+
+  const handleFsSave = async () => {
+    if (!fsWebhookUrl.trim()) {
+      setFsError('请输入 Webhook URL');
+      return;
+    }
+    setFsSaving(true);
+    setFsError('');
+    setFsStatus('');
+    try {
+      await saveFeishuWebhook(fsWebhookUrl.trim(), fsSecret.trim() || undefined);
+      setFsStatus('已保存并启用');
+      await loadChannels();
+    } catch (err) {
+      setFsError(err instanceof Error ? err.message : '保存失败');
+    } finally {
+      setFsSaving(false);
+    }
+  };
+
+  const handleFsUnlink = async () => {
+    setFsError('');
+    setFsStatus('');
+    try {
+      await deleteNotificationChannel('feishu');
+      setFsChannel(null);
+      setFsEnabled(false);
+      setFsStatus('已解除绑定');
+    } catch (err) {
+      setFsError(err instanceof Error ? err.message : '解绑失败');
+    }
+  };
+
+  const handleFsToggle = async (enabled: boolean) => {
+    setFsError('');
+    try {
+      await updateNotificationChannel('feishu', { enabled });
+      setFsEnabled(enabled);
+    } catch (err) {
+      setFsError(err instanceof Error ? err.message : '更新失败');
+    }
+  };
+
+  const handleFsHourChange = async (hour: number) => {
+    setFsError('');
+    setFsNotifyHour(hour);
+    try {
+      await updateNotificationChannel('feishu', { notify_hour: hour });
+    } catch (err) {
+      setFsError(err instanceof Error ? err.message : '更新失败');
+    }
+  };
+
+  const handleFsTest = async () => {
+    setFsTestingSend(true);
+    setFsError('');
+    setFsStatus('');
+    try {
+      const result = await testNotificationChannel('feishu');
+      setFsStatus(result.message);
+    } catch (err) {
+      setFsError(err instanceof Error ? err.message : '发送测试失败');
+    } finally {
+      setFsTestingSend(false);
     }
   };
 
@@ -425,7 +673,7 @@ export function SettingsModal({
                     {[
                       { icon: MessageSquareText, title: '说一句话就入库', desc: 'AI 提取名称、规格、有效期，确认即入库' },
                       { icon: Search, title: '问一句话就找药', desc: '像聊天一样检索你的药箱' },
-                      { icon: Bell, title: '过期自动提醒', desc: '到期药品高亮标记，支持 Telegram 推送' },
+                      { icon: Bell, title: '过期自动提醒', desc: '到期药品高亮标记，支持 Telegram / Discord / 飞书推送' },
                       {
                         icon: Server,
                         title: '一行命令自部署',
@@ -479,7 +727,7 @@ export function SettingsModal({
                       <li>药箱数据默认保存在当前部署环境的 SQLite 中；未启用 AI 和通知时不会主动发送到外部服务。</li>
                       <li>使用 AI 解析、拍照识别或问答时，输入文本、图片，以及 AI 问答所需的当前药箱数据会发送到你配置的模型接口。</li>
                       <li>浏览器设置里填写的 AI Base URL、API Key 和模型名会保存在当前浏览器的 localStorage 中，并在每次 AI 请求时通过请求头发给后端。</li>
-                      <li>启用 Telegram 提醒后，提醒消息中的药品名称、到期日期和状态会发送到 Telegram Bot API 和你绑定的会话。</li>
+                      <li>启用通知提醒（Telegram / Discord / 飞书）后，提醒消息中的药品名称、到期日期和状态会发送到对应平台的 API 和你绑定的会话或频道。</li>
                     </ul>
                   </div>
                 </section>
@@ -502,160 +750,425 @@ export function SettingsModal({
               </>
             ) : activeTab === 'notifications' ? (
               <>
-                <section className={sectionClass}>
-                  <div className={sectionTitleClass}>Telegram</div>
-                  <div className="space-y-3">
-                    <DismissibleNotice
-                      noticeId="settings-telegram-privacy"
-                      title="Telegram 外发提示"
-                      className="bg-status-warn-bg/40 px-3 py-2.5 leading-[1.6]"
-                    >
-                      <p>
-                        启用 Telegram 后，提醒消息会包含药品名称、到期日期和状态，并发送到 Telegram
-                        Bot API 以及你绑定的聊天会话。请仅绑定你信任的账号或群组。
-                      </p>
-                    </DismissibleNotice>
+                {/* Channel sub-tabs */}
+                <div className="inline-flex w-fit rounded-[10px] border border-border/50 bg-surface4 p-[3px]">
+                  {([
+                    { key: 'telegram' as NotifyChannel, label: 'Telegram', connected: !!(tgChannel && (tgChannel.config as TelegramChannelConfig).chatId) },
+                    { key: 'discord' as NotifyChannel, label: 'Discord', connected: !!(dcChannel && (dcChannel.config as DiscordChannelConfig).webhookUrl) },
+                    { key: 'feishu' as NotifyChannel, label: '飞书', connected: !!(fsChannel && (fsChannel.config as FeishuChannelConfig).webhookUrl) },
+                  ]).map((ch) => {
+                    const isActive = activeNotifyChannel === ch.key;
+                    return (
+                      <button
+                        key={ch.key}
+                        type="button"
+                        onClick={() => setActiveNotifyChannel(ch.key)}
+                        className={`flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[11px] font-medium transition-all duration-200 ${
+                          isActive
+                            ? 'theme-panel border border-border/60 text-ink shadow-sm'
+                            : 'border border-transparent text-ink3 hover:text-ink2'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-[5px] w-[5px] shrink-0 rounded-full transition-colors ${
+                            ch.connected ? 'bg-status-ok' : isActive ? 'bg-ink3/40' : 'bg-ink3/25'
+                          }`}
+                        />
+                        {ch.label}
+                      </button>
+                    );
+                  })}
+                </div>
 
-                    {tgChannel && (tgChannel.config as TelegramChannelConfig).chatId ? (
-                      <>
-                        <div className="flex items-center gap-2 rounded-lg border border-status-ok/20 bg-status-ok-bg px-3 py-2">
-                          <div className="h-2 w-2 rounded-full bg-status-ok" />
-                          <span className="text-[12px] text-ink">
-                            已绑定 @{tgBotUsername || '(unknown)'}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          <label className="flex cursor-pointer items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={tgEnabled}
-                              onChange={(e) => void handleTgToggle(e.target.checked)}
-                              className="h-4 w-4 rounded border-border accent-accent"
-                            />
-                            <span className="text-[12px] text-ink">启用每日提醒</span>
-                          </label>
-                        </div>
-
-                        {tgEnabled && (
-                          <div>
-                            <div className={fieldLabelClass}>每日发送时间</div>
-                            <select
-                              value={tgNotifyHour}
-                              onChange={(e) => void handleTgHourChange(Number(e.target.value))}
-                              className={`${inputClass} max-w-[160px]`}
-                            >
-                              {notifyHourOptions.map((h) => (
-                                <option key={h} value={h}>
-                                  {String(h).padStart(2, '0')}:00
-                                </option>
-                              ))}
-                            </select>
-                            <p className="mt-1.5 text-[11px] leading-4 text-ink2">
-                              每天此时检查过期药品并发送提醒（服务器时区）。
-                            </p>
-                          </div>
-                        )}
-
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void handleTgTest()}
-                            disabled={tgTestingSend || !tgEnabled}
-                            className={secondaryButtonClass}
-                          >
-                            {tgTestingSend ? '发送中...' : '发送测试通知'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleTgUnlink()}
-                            className={`${secondaryButtonClass} text-status-danger`}
-                          >
-                            解除绑定
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-[12px] leading-[1.5] text-ink2">
-                          通过 Telegram Bot 接收过期提醒。请先在 Telegram 中找
-                          <a
-                            href="https://t.me/BotFather"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mx-0.5 text-accent hover:underline"
-                          >
-                            @BotFather
-                          </a>
-                          创建一个 Bot，获取 Token 后填入下方。
+                {/* Telegram panel */}
+                {activeNotifyChannel === 'telegram' && (
+                  <section className={sectionClass}>
+                    <div className="space-y-3">
+                      <DismissibleNotice
+                        noticeId="settings-telegram-privacy"
+                        title="Telegram 外发提示"
+                        className="bg-status-warn-bg/40 px-3 py-2.5 leading-[1.6]"
+                      >
+                        <p>
+                          启用 Telegram 后，提醒消息会包含药品名称、到期日期和状态，并发送到 Telegram
+                          Bot API 以及你绑定的聊天会话。请仅绑定你信任的账号或群组。
                         </p>
+                      </DismissibleNotice>
 
-                        <label className="block">
-                          <div className={fieldLabelClass}>Bot Token</div>
-                          <input
-                            type="password"
-                            value={tgBotToken}
-                            onChange={(e) => setTgBotToken(e.target.value)}
-                            placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-                            className={inputClass}
-                          />
-                        </label>
+                      {tgChannel && (tgChannel.config as TelegramChannelConfig).chatId ? (
+                        <>
+                          <div className="flex items-center gap-2 rounded-lg border border-status-ok/20 bg-status-ok-bg px-3 py-2">
+                            <div className="h-2 w-2 rounded-full bg-status-ok" />
+                            <span className="text-[12px] text-ink">
+                              已绑定 @{tgBotUsername || '(unknown)'}
+                            </span>
+                          </div>
 
-                        {tgBotUsername ? (
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 rounded-lg border border-status-ok/20 bg-status-ok-bg px-3 py-2">
-                              <div className="h-2 w-2 rounded-full bg-status-ok" />
-                              <span className="text-[12px] text-ink">Token 有效：@{tgBotUsername}</span>
-                            </div>
-                            <p className="text-[12px] text-ink2">
-                              请打开{' '}
-                              <a
-                                href={`https://t.me/${tgBotUsername}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-accent hover:underline"
+                          <div className="flex items-center gap-3">
+                            <label className="flex cursor-pointer items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={tgEnabled}
+                                onChange={(e) => void handleTgToggle(e.target.checked)}
+                                className="h-4 w-4 rounded border-border accent-accent"
+                              />
+                              <span className="text-[12px] text-ink">启用每日提醒</span>
+                            </label>
+                          </div>
+
+                          {tgEnabled && (
+                            <div>
+                              <div className={fieldLabelClass}>每日发送时间</div>
+                              <select
+                                value={tgNotifyHour}
+                                onChange={(e) => void handleTgHourChange(Number(e.target.value))}
+                                className={`${inputClass} max-w-[160px]`}
                               >
-                                t.me/{tgBotUsername}
-                              </a>{' '}
-                              并发送 <code className="rounded bg-surface4 px-1 py-0.5 text-[11px]">/start</code>，然后点击下方绑定。
-                            </p>
+                                {notifyHourOptions.map((h) => (
+                                  <option key={h} value={h}>
+                                    {String(h).padStart(2, '0')}:00
+                                  </option>
+                                ))}
+                              </select>
+                              <p className="mt-1.5 text-[11px] leading-4 text-ink2">
+                                每天此时检查过期药品并发送提醒（服务器时区）。
+                              </p>
+                            </div>
+                          )}
+
+                          <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
-                              onClick={() => void handleTgLink()}
-                              disabled={tgLinking}
-                              className={primaryButtonClass}
+                              onClick={() => void handleTgTest()}
+                              disabled={tgTestingSend || !tgEnabled}
+                              className={secondaryButtonClass}
                             >
-                              {tgLinking ? '等待 /start 中...' : '开始绑定'}
+                              {tgTestingSend ? '发送中...' : '发送测试通知'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleTgUnlink()}
+                              className={`${secondaryButtonClass} text-status-danger`}
+                            >
+                              解除绑定
                             </button>
                           </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => void handleTgVerify()}
-                            disabled={tgVerifying || !tgBotToken.trim()}
-                            className={secondaryButtonClass}
-                          >
-                            {tgVerifying ? '验证中...' : '验证 Token'}
-                          </button>
-                        )}
-                      </>
-                    )}
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-[12px] leading-[1.5] text-ink2">
+                            通过 Telegram Bot 接收过期提醒。请先在 Telegram 中找
+                            <a
+                              href="https://t.me/BotFather"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mx-0.5 text-accent hover:underline"
+                            >
+                              @BotFather
+                            </a>
+                            创建一个 Bot，获取 Token 后填入下方。
+                          </p>
 
-                    {tgStatus && (
-                      <div className="text-[12px] text-status-ok">{tgStatus}</div>
-                    )}
-                    {tgError && (
-                      <div className="text-[12px] text-status-danger">{tgError}</div>
-                    )}
-                  </div>
-                </section>
+                          <label className="block">
+                            <div className={fieldLabelClass}>Bot Token</div>
+                            <input
+                              type="password"
+                              value={tgBotToken}
+                              onChange={(e) => setTgBotToken(e.target.value)}
+                              placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+                              className={inputClass}
+                            />
+                          </label>
 
-                <section className={sectionClass}>
-                  <div className="mb-1.5 text-[13px] font-semibold text-ink">更多渠道</div>
-                  <p className="text-[12px] leading-[1.5] text-ink3">
-                    Discord、飞书等通知渠道即将支持。
-                  </p>
-                </section>
+                          {tgBotUsername ? (
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2 rounded-lg border border-status-ok/20 bg-status-ok-bg px-3 py-2">
+                                <div className="h-2 w-2 rounded-full bg-status-ok" />
+                                <span className="text-[12px] text-ink">Token 有效：@{tgBotUsername}</span>
+                              </div>
+                              <p className="text-[12px] text-ink2">
+                                请打开{' '}
+                                <a
+                                  href={`https://t.me/${tgBotUsername}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-accent hover:underline"
+                                >
+                                  t.me/{tgBotUsername}
+                                </a>{' '}
+                                并发送 <code className="rounded bg-surface4 px-1 py-0.5 text-[11px]">/start</code>，然后点击下方绑定。
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => void handleTgLink()}
+                                disabled={tgLinking}
+                                className={primaryButtonClass}
+                              >
+                                {tgLinking ? '等待 /start 中...' : '开始绑定'}
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => void handleTgVerify()}
+                              disabled={tgVerifying || !tgBotToken.trim()}
+                              className={secondaryButtonClass}
+                            >
+                              {tgVerifying ? '验证中...' : '验证 Token'}
+                            </button>
+                          )}
+                        </>
+                      )}
+
+                      {tgStatus && (
+                        <div className="text-[12px] text-status-ok">{tgStatus}</div>
+                      )}
+                      {tgError && (
+                        <div className="text-[12px] text-status-danger">{tgError}</div>
+                      )}
+                    </div>
+                  </section>
+                )}
+
+                {/* Discord panel */}
+                {activeNotifyChannel === 'discord' && (
+                  <section className={sectionClass}>
+                    <div className="space-y-3">
+                      {dcChannel && (dcChannel.config as DiscordChannelConfig).webhookUrl ? (
+                        <>
+                          <div className="flex items-center gap-2 rounded-lg border border-status-ok/20 bg-status-ok-bg px-3 py-2">
+                            <div className="h-2 w-2 rounded-full bg-status-ok" />
+                            <span className="text-[12px] text-ink">
+                              已绑定 {dcName || 'Discord Webhook'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <label className="flex cursor-pointer items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={dcEnabled}
+                                onChange={(e) => void handleDcToggle(e.target.checked)}
+                                className="h-4 w-4 rounded border-border accent-accent"
+                              />
+                              <span className="text-[12px] text-ink">启用每日提醒</span>
+                            </label>
+                          </div>
+
+                          {dcEnabled && (
+                            <div>
+                              <div className={fieldLabelClass}>每日发送时间</div>
+                              <select
+                                value={dcNotifyHour}
+                                onChange={(e) => void handleDcHourChange(Number(e.target.value))}
+                                className={`${inputClass} max-w-[160px]`}
+                              >
+                                {notifyHourOptions.map((h) => (
+                                  <option key={h} value={h}>
+                                    {String(h).padStart(2, '0')}:00
+                                  </option>
+                                ))}
+                              </select>
+                              <p className="mt-1.5 text-[11px] leading-4 text-ink2">
+                                每天此时检查过期药品并发送提醒（服务器时区）。
+                              </p>
+                            </div>
+                          )}
+
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void handleDcTest()}
+                              disabled={dcTestingSend || !dcEnabled}
+                              className={secondaryButtonClass}
+                            >
+                              {dcTestingSend ? '发送中...' : '发送测试通知'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDcUnlink()}
+                              className={`${secondaryButtonClass} text-status-danger`}
+                            >
+                              解除绑定
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-[12px] leading-[1.5] text-ink2">
+                            通过 Discord Webhook 接收过期提醒。在 Discord 频道设置 &gt; 整合 &gt; Webhooks 中创建一个 Webhook，复制 URL 后填入下方。
+                          </p>
+
+                          <label className="block">
+                            <div className={fieldLabelClass}>Webhook URL</div>
+                            <input
+                              type="password"
+                              value={dcWebhookUrl}
+                              onChange={(e) => setDcWebhookUrl(e.target.value)}
+                              placeholder="https://discord.com/api/webhooks/..."
+                              className={inputClass}
+                            />
+                          </label>
+
+                          {dcName ? (
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2 rounded-lg border border-status-ok/20 bg-status-ok-bg px-3 py-2">
+                                <div className="h-2 w-2 rounded-full bg-status-ok" />
+                                <span className="text-[12px] text-ink">Webhook 有效：{dcName}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => void handleDcSave()}
+                                disabled={dcSaving}
+                                className={primaryButtonClass}
+                              >
+                                {dcSaving ? '保存中...' : '保存并启用'}
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => void handleDcVerify()}
+                              disabled={dcVerifying || !dcWebhookUrl.trim()}
+                              className={secondaryButtonClass}
+                            >
+                              {dcVerifying ? '验证中...' : '验证 Webhook'}
+                            </button>
+                          )}
+                        </>
+                      )}
+
+                      {dcStatus && (
+                        <div className="text-[12px] text-status-ok">{dcStatus}</div>
+                      )}
+                      {dcError && (
+                        <div className="text-[12px] text-status-danger">{dcError}</div>
+                      )}
+                    </div>
+                  </section>
+                )}
+
+                {/* Feishu panel */}
+                {activeNotifyChannel === 'feishu' && (
+                  <section className={sectionClass}>
+                    <div className="space-y-3">
+                      {fsChannel && (fsChannel.config as FeishuChannelConfig).webhookUrl ? (
+                        <>
+                          <div className="flex items-center gap-2 rounded-lg border border-status-ok/20 bg-status-ok-bg px-3 py-2">
+                            <div className="h-2 w-2 rounded-full bg-status-ok" />
+                            <span className="text-[12px] text-ink">已绑定飞书自定义机器人</span>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <label className="flex cursor-pointer items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={fsEnabled}
+                                onChange={(e) => void handleFsToggle(e.target.checked)}
+                                className="h-4 w-4 rounded border-border accent-accent"
+                              />
+                              <span className="text-[12px] text-ink">启用每日提醒</span>
+                            </label>
+                          </div>
+
+                          {fsEnabled && (
+                            <div>
+                              <div className={fieldLabelClass}>每日发送时间</div>
+                              <select
+                                value={fsNotifyHour}
+                                onChange={(e) => void handleFsHourChange(Number(e.target.value))}
+                                className={`${inputClass} max-w-[160px]`}
+                              >
+                                {notifyHourOptions.map((h) => (
+                                  <option key={h} value={h}>
+                                    {String(h).padStart(2, '0')}:00
+                                  </option>
+                                ))}
+                              </select>
+                              <p className="mt-1.5 text-[11px] leading-4 text-ink2">
+                                每天此时检查过期药品并发送提醒（服务器时区）。
+                              </p>
+                            </div>
+                          )}
+
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void handleFsTest()}
+                              disabled={fsTestingSend || !fsEnabled}
+                              className={secondaryButtonClass}
+                            >
+                              {fsTestingSend ? '发送中...' : '发送测试通知'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleFsUnlink()}
+                              className={`${secondaryButtonClass} text-status-danger`}
+                            >
+                              解除绑定
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-[12px] leading-[1.5] text-ink2">
+                            通过飞书自定义机器人接收过期提醒。在飞书群设置中添加自定义机器人，复制 Webhook 地址后填入下方。
+                          </p>
+
+                          <label className="block">
+                            <div className={fieldLabelClass}>Webhook URL</div>
+                            <input
+                              type="password"
+                              value={fsWebhookUrl}
+                              onChange={(e) => setFsWebhookUrl(e.target.value)}
+                              placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..."
+                              className={inputClass}
+                            />
+                          </label>
+
+                          <label className="block">
+                            <div className={fieldLabelClass}>签名校验密钥（可选）</div>
+                            <input
+                              type="password"
+                              value={fsSecret}
+                              onChange={(e) => setFsSecret(e.target.value)}
+                              placeholder="留空则不启用签名校验"
+                              className={inputClass}
+                            />
+                          </label>
+
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void handleFsVerify()}
+                              disabled={fsVerifying || !fsWebhookUrl.trim()}
+                              className={secondaryButtonClass}
+                            >
+                              {fsVerifying ? '验证中...' : '验证 Webhook'}
+                            </button>
+                            {fsStatus && fsStatus.includes('成功') && (
+                              <button
+                                type="button"
+                                onClick={() => void handleFsSave()}
+                                disabled={fsSaving}
+                                className={primaryButtonClass}
+                              >
+                                {fsSaving ? '保存中...' : '保存并启用'}
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+
+                      {fsStatus && (
+                        <div className="text-[12px] text-status-ok">{fsStatus}</div>
+                      )}
+                      {fsError && (
+                        <div className="text-[12px] text-status-danger">{fsError}</div>
+                      )}
+                    </div>
+                  </section>
+                )}
               </>
             ) : activeTab === 'ai' ? (
               <>

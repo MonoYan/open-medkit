@@ -3,6 +3,8 @@ import { Hono } from 'hono';
 import { getDb } from '../db/client';
 import { sendNotificationNow } from '../services/notifier';
 import * as telegram from '../services/telegram';
+import * as discord from '../services/discord';
+import * as feishu from '../services/feishu';
 
 interface ChannelRow {
   channel_type: string;
@@ -19,10 +21,21 @@ function maskToken(token: string): string {
   return token.slice(0, 6) + '...' + token.slice(-4);
 }
 
+function maskUrl(url: string): string {
+  if (url.length <= 20) return '***';
+  return url.slice(0, 16) + '...' + url.slice(-8);
+}
+
 function sanitizeChannel(row: ChannelRow) {
   const config = JSON.parse(row.config) as Record<string, unknown>;
   if (typeof config.botToken === 'string') {
     config.botToken = maskToken(config.botToken);
+  }
+  if (typeof config.webhookUrl === 'string') {
+    config.webhookUrl = maskUrl(config.webhookUrl);
+  }
+  if (typeof config.secret === 'string') {
+    config.secret = '***';
   }
   return {
     channel_type: row.channel_type,
@@ -188,6 +201,112 @@ notificationsRouter.post('/channels/telegram/link', async (c) => {
   } catch (error) {
     return c.json(
       { error: 'Failed to link Telegram', detail: error instanceof Error ? error.message : 'Unknown error' },
+      500,
+    );
+  }
+});
+
+// ---- POST /channels/discord/verify ----
+notificationsRouter.post('/channels/discord/verify', async (c) => {
+  try {
+    const { webhookUrl } = (await c.req.json()) as { webhookUrl: string };
+    if (!webhookUrl) {
+      return c.json({ error: 'webhookUrl is required' }, 400);
+    }
+
+    const result = await discord.verifyWebhook(webhookUrl);
+    return c.json({ data: { name: result.name } });
+  } catch (error) {
+    return c.json(
+      { error: 'Failed to verify Discord webhook', detail: error instanceof Error ? error.message : 'Unknown error' },
+      400,
+    );
+  }
+});
+
+// ---- POST /channels/discord/save ----
+notificationsRouter.post('/channels/discord/save', async (c) => {
+  try {
+    const { webhookUrl } = (await c.req.json()) as { webhookUrl: string };
+    if (!webhookUrl) {
+      return c.json({ error: 'webhookUrl is required' }, 400);
+    }
+
+    const info = await discord.verifyWebhook(webhookUrl);
+    const db = getDb();
+    const config = JSON.stringify({ webhookUrl, name: info.name });
+
+    const existing = db
+      .prepare('SELECT channel_type FROM notification_channels WHERE channel_type = ?')
+      .get('discord');
+
+    if (existing) {
+      db.prepare(
+        'UPDATE notification_channels SET config = ?, enabled = 1 WHERE channel_type = ?',
+      ).run(config, 'discord');
+    } else {
+      db.prepare(
+        'INSERT INTO notification_channels (channel_type, enabled, config) VALUES (?, 1, ?)',
+      ).run('discord', config);
+    }
+
+    return c.json({ data: { saved: true, name: info.name } });
+  } catch (error) {
+    return c.json(
+      { error: 'Failed to save Discord webhook', detail: error instanceof Error ? error.message : 'Unknown error' },
+      500,
+    );
+  }
+});
+
+// ---- POST /channels/feishu/verify ----
+notificationsRouter.post('/channels/feishu/verify', async (c) => {
+  try {
+    const { webhookUrl, secret } = (await c.req.json()) as { webhookUrl: string; secret?: string };
+    if (!webhookUrl) {
+      return c.json({ error: 'webhookUrl is required' }, 400);
+    }
+
+    await feishu.verifyWebhook(webhookUrl, secret);
+    return c.json({ data: { ok: true } });
+  } catch (error) {
+    return c.json(
+      { error: 'Failed to verify Feishu webhook', detail: error instanceof Error ? error.message : 'Unknown error' },
+      400,
+    );
+  }
+});
+
+// ---- POST /channels/feishu/save ----
+notificationsRouter.post('/channels/feishu/save', async (c) => {
+  try {
+    const { webhookUrl, secret } = (await c.req.json()) as { webhookUrl: string; secret?: string };
+    if (!webhookUrl) {
+      return c.json({ error: 'webhookUrl is required' }, 400);
+    }
+
+    await feishu.verifyWebhook(webhookUrl, secret);
+    const db = getDb();
+    const config = JSON.stringify({ webhookUrl, ...(secret ? { secret } : {}) });
+
+    const existing = db
+      .prepare('SELECT channel_type FROM notification_channels WHERE channel_type = ?')
+      .get('feishu');
+
+    if (existing) {
+      db.prepare(
+        'UPDATE notification_channels SET config = ?, enabled = 1 WHERE channel_type = ?',
+      ).run(config, 'feishu');
+    } else {
+      db.prepare(
+        'INSERT INTO notification_channels (channel_type, enabled, config) VALUES (?, 1, ?)',
+      ).run('feishu', config);
+    }
+
+    return c.json({ data: { saved: true } });
+  } catch (error) {
+    return c.json(
+      { error: 'Failed to save Feishu webhook', detail: error instanceof Error ? error.message : 'Unknown error' },
       500,
     );
   }

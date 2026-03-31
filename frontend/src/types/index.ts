@@ -62,10 +62,20 @@ export interface TelegramChannelConfig {
   botUsername?: string;
 }
 
+export interface DiscordChannelConfig {
+  webhookUrl: string;
+  name?: string;
+}
+
+export interface FeishuChannelConfig {
+  webhookUrl: string;
+  secret?: string;
+}
+
 export interface NotificationChannel {
   channel_type: string;
   enabled: boolean;
-  config: TelegramChannelConfig | Record<string, unknown>;
+  config: TelegramChannelConfig | DiscordChannelConfig | FeishuChannelConfig | Record<string, unknown>;
   notify_hour: number;
   last_notified_date?: string;
 }

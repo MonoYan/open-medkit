@@ -1,22 +1,44 @@
 import type { SqliteDatabase } from '../db/client';
 import { getDb } from '../db/client';
 import * as telegram from './telegram';
+import * as discord from './discord';
+import * as feishu from './feishu';
 
 // ---------------------------------------------------------------------------
 // Channel abstraction
 // ---------------------------------------------------------------------------
 
 interface NotificationSender {
+  format: MessageFormat;
   send(config: Record<string, string>, message: string): Promise<void>;
 }
 
 const senders: Record<string, NotificationSender> = {
   telegram: {
+    format: 'html',
     async send(config, message) {
       if (!config.botToken || !config.chatId) {
         throw new Error('Telegram channel not fully configured');
       }
       await telegram.sendMessage(config.botToken, config.chatId, message);
+    },
+  },
+  discord: {
+    format: 'markdown',
+    async send(config, message) {
+      if (!config.webhookUrl) {
+        throw new Error('Discord channel not fully configured');
+      }
+      await discord.sendWebhook(config.webhookUrl, message);
+    },
+  },
+  feishu: {
+    format: 'plain',
+    async send(config, message) {
+      if (!config.webhookUrl) {
+        throw new Error('Feishu channel not fully configured');
+      }
+      await feishu.sendWebhook(config.webhookUrl, message, config.secret);
     },
   },
 };
@@ -37,15 +59,29 @@ function daysUntil(dateStr: string, today: string): number {
   return Math.ceil((d.getTime() - t.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+export type MessageFormat = 'html' | 'markdown' | 'plain';
+
+function bold(text: string, format: MessageFormat): string {
+  switch (format) {
+    case 'html':
+      return `<b>${text}</b>`;
+    case 'markdown':
+      return `**${text}**`;
+    case 'plain':
+      return text;
+  }
+}
+
 export function buildNotificationMessage(
   expired: MedicineRow[],
   expiring: MedicineRow[],
   todayStr: string,
+  format: MessageFormat = 'html',
 ): string {
-  const lines: string[] = ['⚠️ <b>药品过期提醒</b>', ''];
+  const lines: string[] = [`⚠️ ${bold('药品过期提醒', format)}`, ''];
 
   if (expired.length > 0) {
-    lines.push(`<b>已过期（${expired.length} 件）：</b>`);
+    lines.push(bold(`已过期（${expired.length} 件）：`, format));
     for (const m of expired) {
       const days = Math.abs(daysUntil(m.expires_at!, todayStr));
       lines.push(`  • ${m.name} — 已过期 ${days} 天（${m.expires_at}）`);
@@ -54,7 +90,7 @@ export function buildNotificationMessage(
   }
 
   if (expiring.length > 0) {
-    lines.push(`<b>即将过期（${expiring.length} 件）：</b>`);
+    lines.push(bold(`即将过期（${expiring.length} 件）：`, format));
     for (const m of expiring) {
       const days = daysUntil(m.expires_at!, todayStr);
       lines.push(`  • ${m.name} — ${days} 天后到期（${m.expires_at}）`);
@@ -123,7 +159,7 @@ export async function sendNotificationNow(channelType: string): Promise<string> 
     return '当前没有过期或即将过期的药品，无需发送提醒。';
   }
 
-  const message = buildNotificationMessage(expired, expiring, todayStr);
+  const message = buildNotificationMessage(expired, expiring, todayStr, sender.format);
   await sender.send(config, message);
   return `已发送通知：${expired.length} 件已过期，${expiring.length} 件即将过期。`;
 }
@@ -161,7 +197,7 @@ async function tick() {
         continue;
       }
 
-      const message = buildNotificationMessage(expired, expiring, todayStr);
+      const message = buildNotificationMessage(expired, expiring, todayStr, sender.format);
       await sender.send(config, message);
 
       db.prepare(

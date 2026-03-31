@@ -46,4 +46,25 @@ describe('buildNotificationMessage', () => {
     const message = buildNotificationMessage(expired, [], '2026-03-29');
     expect(message).toContain('10 天');
   });
+
+  it('defaults to html format with <b> tags', () => {
+    const expired = [{ id: 1, name: 'A', expires_at: '2026-03-10' }];
+    const message = buildNotificationMessage(expired, [], '2026-03-29');
+    expect(message).toContain('<b>');
+  });
+
+  it('uses **bold** in markdown format', () => {
+    const expired = [{ id: 1, name: 'A', expires_at: '2026-03-10' }];
+    const message = buildNotificationMessage(expired, [], '2026-03-29', 'markdown');
+    expect(message).toContain('**');
+    expect(message).not.toContain('<b>');
+  });
+
+  it('uses no markup in plain format', () => {
+    const expired = [{ id: 1, name: 'A', expires_at: '2026-03-10' }];
+    const message = buildNotificationMessage(expired, [], '2026-03-29', 'plain');
+    expect(message).not.toContain('<b>');
+    expect(message).not.toContain('**');
+    expect(message).toContain('药品过期提醒');
+  });
 });
