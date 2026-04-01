@@ -35,6 +35,11 @@ AFTER UPDATE ON notification_channels
 BEGIN
   UPDATE notification_channels SET updated_at = datetime('now') WHERE channel_type = NEW.channel_type;
 END;
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 `;
 
 export const DEFAULT_CATEGORIES = [

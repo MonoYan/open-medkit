@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 
+import { useTimezone } from '../hooks/useTimezone';
 import { daysUntilExpiry, formatDate, getMedicineStatus, getStatusText } from '../lib/utils';
 import type { Medicine } from '../types';
 
@@ -83,6 +84,7 @@ export function MedicineDetailModal({
   onEdit,
   onDelete,
 }: MedicineDetailModalProps) {
+  const { timezone } = useTimezone();
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
 
@@ -117,8 +119,8 @@ export function MedicineDetailModal({
     return null;
   }
 
-  const status = getMedicineStatus(medicine.expires_at, expiringDays);
-  const days = medicine.expires_at ? daysUntilExpiry(medicine.expires_at) : undefined;
+  const status = getMedicineStatus(medicine.expires_at, timezone, expiringDays);
+  const days = medicine.expires_at ? daysUntilExpiry(medicine.expires_at, timezone) : undefined;
   const styles = getStatusClasses(status);
 
   const handleDelete = async () => {

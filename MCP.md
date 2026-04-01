@@ -1,6 +1,8 @@
 # MCP Server 使用指南
 
-Open MedKit 内置了一个 [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) 服务器，通过 stdio 传输协议暴露药箱的增删改查操作。任何支持 MCP 的 AI 客户端（Claude Code、Cursor、Claude Desktop、OpenClaw 等）都可以直接调用这些 tool 来管理你的家庭药箱数据，无需打开网页。
+OpenMedKit 内置了一个 [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) 服务器，通过 stdio 传输协议暴露药箱的增删改查操作。任何支持 MCP 的 AI 客户端（Claude Code、Cursor、Claude Desktop、OpenClaw 等）都可以直接调用这些 tool 来管理你的家庭药箱数据，无需打开网页。
+
+如果你完全不打开 Web UI、只通过 MCP 使用 OpenMedKit，请特别注意先初始化“业务时区”。未初始化时，系统会回退到 `UTC`，不会使用服务器本地时区。
 
 ---
 
@@ -18,6 +20,25 @@ npm install
 > MCP Server 直接读写 SQLite 数据库，和 Web UI 共享同一份数据（WAL 模式支持并发访问）。不需要启动 HTTP 服务器。
 >
 > **注意**：`DB_PATH` 必须和 Web UI 指向同一个数据库文件。开发模式下 `npm run dev` 的 backend 工作目录是 `backend/`，默认数据库在 `backend/data/medicine.db`；MCP 进程的工作目录通常是项目根目录，因此需要写成 `./backend/data/medicine.db`。
+
+---
+
+## 首次使用：先初始化时区
+
+OpenMedKit 会把“今天是几号”“哪些药算快过期”“每天几点发提醒”这些业务日期统一按一个**业务时区**来计算。
+
+- 如果你先打开过 Web UI：应用会自动检测浏览器时区并保存到服务端
+- 如果你只通过 MCP 使用：请在第一次连接后主动初始化
+
+推荐流程：
+
+```text
+1. 先运行 get_settings
+2. 如果看到 configured: false
+3. 再运行 set_timezone(timezone="Asia/Shanghai")
+```
+
+未初始化时，MCP 会明确提示当前只是回退到 `UTC`。
 
 ---
 
@@ -122,6 +143,8 @@ OpenClaw 和 Codex CLI 的 Skill 系统通过 `SKILL.md` + MCP 工具来扩展 a
 
 连接到 `medkit` MCP 服务器后，你可以使用以下工具：
 
+- `get_settings` — 查看当前业务时区是否已初始化
+- `set_timezone` — 初始化或更新业务时区
 - `list_medicines` — 列出药品，支持按分类、过期状态、名称筛选
 - `get_medicine` — 按 ID 查看单个药品详情
 - `add_medicine` — 添加药品（只需提供 name，其他字段可选）
@@ -132,6 +155,8 @@ OpenClaw 和 Codex CLI 的 Skill 系统通过 `SKILL.md` + MCP 工具来扩展 a
 
 ## 操作指南
 
+- 用户说「先把时区设成上海时间」→ 调用 `set_timezone`
+- 用户说「看一下时区有没有配」→ 调用 `get_settings`
 - 用户说「加个药」→ 从描述中提取字段，调用 `add_medicine`
 - 用户问「有退烧药吗」→ 调用 `search_medicines`，query 传 "退烧"
 - 用户说「看看快过期的」→ 调用 `list_medicines`，status 传 "expiring"
@@ -208,6 +233,8 @@ OpenClaw 和 Codex CLI 的 Skill 系统通过 `SKILL.md` + MCP 工具来扩展 a
 
 | 工具 | 说明 | 参数 |
 |------|------|------|
+| `get_settings` | 查看当前与 MCP 使用相关的设置，尤其是业务时区是否已初始化 | 无 |
+| `set_timezone` | 初始化或更新业务时区 | `timezone` IANA 时区，例如 `Asia/Shanghai`、`America/New_York` |
 | `list_medicines` | 列出药品，支持筛选 | `category?` 分类名, `status?` "expired"/"expiring"/"ok", `search?` 名称模糊搜索, `expiring_days?` 即将过期天数阈值（默认 30） |
 | `get_medicine` | 按 ID 获取单条药品 | `id` 药品 ID |
 | `add_medicine` | 添加药品（name 不能为空） | `name` (必填), `name_en?`, `spec?`, `quantity?`, `expires_at?`, `category?`, `usage_desc?`, `location?`, `notes?` |
@@ -220,6 +247,7 @@ OpenClaw 和 Codex CLI 的 Skill 系统通过 `SKILL.md` + MCP 工具来扩展 a
 
 | URI | 说明 |
 |-----|------|
+| `medkit://settings` | 当前业务时区状态（是否已初始化、当前使用哪个时区） |
 | `medkit://medicines` | 全量药品数据 (JSON) |
 | `medkit://stats` | 统计摘要 (JSON)，支持 `?expiring_days=N` 自定义即将过期阈值（默认 30 天） |
 
@@ -228,6 +256,22 @@ OpenClaw 和 Codex CLI 的 Skill 系统通过 `SKILL.md` + MCP 工具来扩展 a
 ## 典型对话示例
 
 以下示例适用于所有支持 MCP 的客户端：
+
+### 初始化时区
+
+```text
+用户: 先帮我把药箱时区设成上海时间
+
+Agent 调用: set_timezone({
+  timezone: "Asia/Shanghai"
+})
+```
+
+```text
+用户: 看一下现在药箱是不是已经配置时区了
+
+Agent 调用: get_settings()
+```
 
 ### 添加药品
 

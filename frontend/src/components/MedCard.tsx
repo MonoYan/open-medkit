@@ -1,3 +1,4 @@
+import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, getMedicineStatus, getStatusText, daysUntilExpiry } from '../lib/utils';
 import type { Medicine } from '../types';
 
@@ -40,8 +41,9 @@ function getStatusClasses(status: ReturnType<typeof getMedicineStatus>) {
 }
 
 export function MedCard({ medicine, expiringDays, onOpen }: MedCardProps) {
-  const status = getMedicineStatus(medicine.expires_at, expiringDays);
-  const days = medicine.expires_at ? daysUntilExpiry(medicine.expires_at) : undefined;
+  const { timezone } = useTimezone();
+  const status = getMedicineStatus(medicine.expires_at, timezone, expiringDays);
+  const days = medicine.expires_at ? daysUntilExpiry(medicine.expires_at, timezone) : undefined;
   const styles = getStatusClasses(status);
   const quantity = medicine.quantity || '未填写';
   const location = medicine.location || '未填写';

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   getDateBoundaries,
@@ -10,6 +10,15 @@ import {
   validateImageDataUrl,
 } from './medicine';
 import type { MedicineRecord } from './medicine';
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-04-02T16:30:00Z'));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('normalizeExpiringDays', () => {
   it('returns the number when positive finite', () => {
@@ -44,14 +53,14 @@ describe('normalizeQueryResponseStyle', () => {
 
 describe('getDateBoundaries', () => {
   it('returns todayStr and in30daysStr with default 30 days', () => {
-    const { todayStr, in30daysStr } = getDateBoundaries();
+    const { todayStr, in30daysStr } = getDateBoundaries(30, 'UTC');
     expect(todayStr).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(in30daysStr).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(new Date(in30daysStr) > new Date(todayStr)).toBe(true);
   });
 
   it('respects custom expiring days', () => {
-    const { todayStr, in30daysStr } = getDateBoundaries(7);
+    const { todayStr, in30daysStr } = getDateBoundaries(7, 'UTC');
     const daysDiff =
       (new Date(in30daysStr).getTime() - new Date(todayStr).getTime()) /
       (1000 * 60 * 60 * 24);
@@ -60,7 +69,7 @@ describe('getDateBoundaries', () => {
 });
 
 describe('getMedicineExpiryState', () => {
-  const today = new Date();
+  const today = new Date('2026-04-02T16:30:00Z');
   const todayStr = today.toISOString().slice(0, 10);
 
   const pastDate = new Date(today);
@@ -75,7 +84,7 @@ describe('getMedicineExpiryState', () => {
   futureDate.setDate(futureDate.getDate() + 60);
   const futureStr = futureDate.toISOString().slice(0, 10);
 
-  const { in30daysStr } = getDateBoundaries(30);
+  const { in30daysStr } = getDateBoundaries(30, 'UTC');
 
   it('returns "expired" when expires_at is in the past', () => {
     const med = { expires_at: pastStr } as any;

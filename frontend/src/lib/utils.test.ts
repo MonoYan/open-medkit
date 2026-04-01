@@ -1,47 +1,43 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { daysUntilExpiry, formatDate, getMedicineStatus, getStatusText } from './utils';
 
-function todayStr() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-}
-
-function offsetDate(days: number) {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
+const timezone = 'Asia/Shanghai';
 
 describe('getMedicineStatus', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-02T16:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('returns "unknown" when no date provided', () => {
-    expect(getMedicineStatus(undefined)).toBe('unknown');
-    expect(getMedicineStatus('')).toBe('unknown');
+    expect(getMedicineStatus(undefined, timezone)).toBe('unknown');
+    expect(getMedicineStatus('', timezone)).toBe('unknown');
   });
 
   it('returns "expired" for past dates', () => {
-    expect(getMedicineStatus('2020-01-01')).toBe('expired');
+    expect(getMedicineStatus('2026-04-02', timezone)).toBe('expired');
   });
 
   it('returns "expiring" for dates within 30 days', () => {
-    const soon = offsetDate(15);
-    expect(getMedicineStatus(soon)).toBe('expiring');
+    expect(getMedicineStatus('2026-04-18', timezone)).toBe('expiring');
   });
 
   it('returns "ok" for dates far in the future', () => {
-    const future = offsetDate(90);
-    expect(getMedicineStatus(future)).toBe('ok');
+    expect(getMedicineStatus('2026-07-02', timezone)).toBe('ok');
   });
 
   it('respects custom expiringDays parameter', () => {
-    const in10days = offsetDate(10);
-    expect(getMedicineStatus(in10days, 7)).toBe('ok');
-    expect(getMedicineStatus(in10days, 15)).toBe('expiring');
+    expect(getMedicineStatus('2026-04-13', timezone, 7)).toBe('ok');
+    expect(getMedicineStatus('2026-04-13', timezone, 15)).toBe('expiring');
   });
 
   it('returns "expiring" when expires_at equals today', () => {
-    const today = todayStr();
-    expect(getMedicineStatus(today)).toBe('expiring');
+    expect(getMedicineStatus('2026-04-03', timezone)).toBe('expiring');
   });
 });
 
@@ -60,19 +56,25 @@ describe('formatDate', () => {
 });
 
 describe('daysUntilExpiry', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-02T16:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('returns positive number for future dates', () => {
-    const future = offsetDate(10);
-    expect(daysUntilExpiry(future)).toBe(10);
+    expect(daysUntilExpiry('2026-04-13', timezone)).toBe(10);
   });
 
   it('returns negative number for past dates', () => {
-    const past = offsetDate(-5);
-    expect(daysUntilExpiry(past)).toBe(-5);
+    expect(daysUntilExpiry('2026-03-29', timezone)).toBe(-5);
   });
 
   it('returns 0 for today', () => {
-    const today = todayStr();
-    expect(daysUntilExpiry(today)).toBe(0);
+    expect(daysUntilExpiry('2026-04-03', timezone)).toBe(0);
   });
 });
 

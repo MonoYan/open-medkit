@@ -7,6 +7,7 @@ import {
   getStats,
   updateMedicine as updateMedicineRequest,
 } from '../lib/api';
+import { useTimezone } from './useTimezone';
 import { getMedicineStatus } from '../lib/utils';
 import type { Medicine, MedicineFilterStatus, Stats } from '../types';
 
@@ -26,6 +27,7 @@ const emptyStats: Stats = {
 };
 
 export function useMedicines(expiringDays: number) {
+  const { timezone } = useTimezone();
   const [allMedicines, setAllMedicines] = useState<Medicine[]>([]);
   const [stats, setStats] = useState<Stats>(emptyStats);
   const [loading, setLoading] = useState(true);
@@ -52,7 +54,7 @@ export function useMedicines(expiringDays: number) {
 
   useEffect(() => {
     void refresh();
-  }, [expiringDays]);
+  }, [expiringDays, timezone]);
 
   const medicines = allMedicines.filter((medicine) => {
     if (filter.category && medicine.category !== filter.category) {
@@ -60,7 +62,7 @@ export function useMedicines(expiringDays: number) {
     }
 
     if (filter.status) {
-      return getMedicineStatus(medicine.expires_at, expiringDays) === filter.status;
+      return getMedicineStatus(medicine.expires_at, timezone, expiringDays) === filter.status;
     }
 
     return true;

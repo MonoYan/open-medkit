@@ -45,6 +45,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   testDb.close();
 });
 
@@ -94,6 +95,23 @@ describe('GET /api/medicines', () => {
     const body = await res.json();
     expect(body.data).toHaveLength(1);
     expect(body.data[0].name).toBe('OK');
+  });
+
+  it('uses the configured timezone for status filters', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-02T16:30:00Z'));
+
+    testDb
+      .prepare("INSERT INTO app_settings (key, value) VALUES ('timezone', ?)")
+      .run('Asia/Shanghai');
+    insertMedicine({ name: 'Boundary', expires_at: '2026-04-02' });
+
+    const app = createApp();
+    const res = await app.request('/api/medicines?status=expired');
+    const body = await res.json();
+
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].name).toBe('Boundary');
   });
 });
 

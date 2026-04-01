@@ -1,33 +1,57 @@
 import type { MedicineStatus } from '../types';
 
+const DAY_IN_MS = 86_400_000;
+
 function parseDateInput(dateStr: string) {
   const [year, month, day] = dateStr.split('-').map(Number);
   return new Date(year, (month || 1) - 1, day || 1, 12, 0, 0, 0);
 }
 
-function getToday() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0);
+function getTodayStr(timezone: string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+
+  return `${values.year || '1970'}-${values.month || '01'}-${values.day || '01'}`;
+}
+
+function dateStrToUtcMs(dateStr: string) {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return Date.UTC(year, (month || 1) - 1, day || 1);
+}
+
+function addDays(dateStr: string, days: number) {
+  const result = new Date(dateStrToUtcMs(dateStr) + days * DAY_IN_MS);
+
+  return [
+    String(result.getUTCFullYear()).padStart(4, '0'),
+    String(result.getUTCMonth() + 1).padStart(2, '0'),
+    String(result.getUTCDate()).padStart(2, '0'),
+  ].join('-');
 }
 
 export function getMedicineStatus(
   expiresAt?: string,
+  timezone = 'UTC',
   expiringDays = 30,
 ): MedicineStatus {
   if (!expiresAt) {
     return 'unknown';
   }
 
-  const expiry = parseDateInput(expiresAt);
-  const today = getToday();
-  const warningDate = new Date(today);
-  warningDate.setDate(warningDate.getDate() + expiringDays);
+  const todayStr = getTodayStr(timezone);
+  const warningDateStr = addDays(todayStr, expiringDays);
 
-  if (expiry < today) {
+  if (expiresAt < todayStr) {
     return 'expired';
   }
 
-  if (expiry <= warningDate) {
+  if (expiresAt <= warningDateStr) {
     return 'expiring';
   }
 
@@ -48,12 +72,10 @@ export function formatDate(dateStr?: string) {
   }).format(date);
 }
 
-export function daysUntilExpiry(expiresAt: string) {
-  const today = getToday();
-  const expiry = parseDateInput(expiresAt);
-  const diff = expiry.getTime() - today.getTime();
+export function daysUntilExpiry(expiresAt: string, timezone = 'UTC') {
+  const diff = dateStrToUtcMs(expiresAt) - dateStrToUtcMs(getTodayStr(timezone));
 
-  return Math.round(diff / (1000 * 60 * 60 * 24));
+  return Math.round(diff / DAY_IN_MS);
 }
 
 export function getStatusText(status: MedicineStatus, days?: number) {

@@ -87,6 +87,8 @@ docker compose up -d
 
 Open http://localhost:3000.
 
+首次打开 Web UI 时，应用会自动检测当前浏览器时区并写入服务端；后续的过期判断、AI 问答中的“今天”以及每日提醒时间都会以这个业务时区为准。
+
 ### Local Development
 
 Prerequisites: Node.js >= 20
@@ -100,6 +102,8 @@ npm run dev
 ```
 
 Frontend runs on http://localhost:5173, backend on http://localhost:3000.
+
+如果你只通过 MCP / CLI / OpenClaw 使用 Open MedKit、从不打开 Web UI，请先初始化时区。未初始化时系统会回退到 `UTC`，不会使用服务器本地时区。
 
 ## Configuration
 
@@ -166,7 +170,16 @@ Open MedKit 内置 [MCP](https://modelcontextprotocol.io/) 服务器，让 AI ag
 }
 ```
 
-提供 7 个 tool（`list_medicines`、`get_medicine`、`add_medicine`、`update_medicine`、`delete_medicine`、`get_stats`、`search_medicines`）和 2 个 resource（`medkit://medicines`、`medkit://stats`）。
+如果你通过浏览器使用，首次访问时会自动检测并保存浏览器时区。
+
+如果你只通过 MCP 使用，建议第一次连接后先运行：
+
+```text
+get_settings
+set_timezone(timezone="Asia/Shanghai")
+```
+
+未初始化时区时，MCP 会明确提示当前只是回退到 `UTC`，而不是服务器本地时区。
 
 **详细文档**：各客户端的完整配置方法、OpenClaw Skill 编写模板、对话示例、故障排查等，请参阅 **[MCP.md](./MCP.md)**。
 

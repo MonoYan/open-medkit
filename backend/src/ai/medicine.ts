@@ -1,5 +1,9 @@
 import { getDb } from '../db/client';
 import { DEFAULT_CATEGORIES } from '../db/schema';
+import {
+  getDateBoundaries as getTimezoneDateBoundaries,
+  getStoredTimezone,
+} from '../utils/timezone';
 import type { QueryResponseStyle } from './types';
 
 export interface MedicineRecord {
@@ -47,15 +51,13 @@ export function normalizeQueryResponseStyle(value: unknown): QueryResponseStyle 
   return value === 'detailed' ? 'detailed' : 'concise';
 }
 
-export function getDateBoundaries(expiringDays = 30) {
-  const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
-  const in30days = new Date(today);
-  in30days.setDate(in30days.getDate() + expiringDays);
+export function getDateBoundaries(expiringDays = 30, timezone?: string) {
+  const resolvedTimezone = timezone || getStoredTimezone(getDb()).timezone;
+  const { todayStr, warningDateStr } = getTimezoneDateBoundaries(resolvedTimezone, expiringDays);
 
   return {
     todayStr,
-    in30daysStr: in30days.toISOString().slice(0, 10),
+    in30daysStr: warningDateStr,
   };
 }
 

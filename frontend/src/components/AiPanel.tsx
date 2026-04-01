@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 
 import { DismissibleNotice } from './DismissibleNotice';
+import { useTimezone } from '../hooks/useTimezone';
 import { queryMedicines, queryMedicinesStream } from '../lib/api';
 import { daysUntilExpiry, formatDate, getMedicineStatus, getStatusText } from '../lib/utils';
 import type { Medicine, Settings } from '../types';
@@ -121,7 +122,7 @@ function addSuggestion(suggestions: string[], seen: Set<string>, question: strin
   seen.add(normalized);
 }
 
-function buildSuggestionChips(medicines: Medicine[], expiringDays: number) {
+function buildSuggestionChips(medicines: Medicine[], timezone: string, expiringDays: number) {
   if (medicines.length === 0) {
     return fallbackSuggestionChips;
   }
@@ -130,7 +131,7 @@ function buildSuggestionChips(medicines: Medicine[], expiringDays: number) {
   const seen = new Set<string>();
   const medicineRecords = medicines.map((medicine) => ({
     medicine,
-    status: getMedicineStatus(medicine.expires_at, expiringDays),
+    status: getMedicineStatus(medicine.expires_at, timezone, expiringDays),
     corpus: [
       medicine.name,
       medicine.name_en,
@@ -290,6 +291,7 @@ function AssistantMedicineResults({
   medicines,
   expiringDays,
 }: AssistantMedicineResultsProps) {
+  const { timezone } = useTimezone();
   const [page, setPage] = useState(0);
   const totalPages = Math.ceil(medicines.length / MEDICINES_PER_PAGE);
   const currentPage = Math.min(page, Math.max(totalPages - 1, 0));
@@ -303,8 +305,10 @@ function AssistantMedicineResults({
   return (
     <div className="mt-3 space-y-2">
       {visibleMedicines.map((medicine) => {
-        const status = getMedicineStatus(medicine.expires_at, expiringDays);
-        const days = medicine.expires_at ? daysUntilExpiry(medicine.expires_at) : undefined;
+        const status = getMedicineStatus(medicine.expires_at, timezone, expiringDays);
+        const days = medicine.expires_at
+          ? daysUntilExpiry(medicine.expires_at, timezone)
+          : undefined;
 
         return (
           <div
@@ -591,6 +595,7 @@ function CelebrationParticles() {
 }
 
 export function AiPanel({ initialQuestion, settings, medicines = [], medicinesLoading, onAddMedicine }: AiPanelProps) {
+  const { timezone } = useTimezone();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -598,7 +603,7 @@ export function AiPanel({ initialQuestion, settings, medicines = [], medicinesLo
   const messageIdRef = useRef(1);
   const activeControllerRef = useRef<AbortController | null>(null);
   const hasConversation = messages.length > 0;
-  const suggestionChips = buildSuggestionChips(medicines, settings.expiringDays);
+  const suggestionChips = buildSuggestionChips(medicines, timezone, settings.expiringDays);
 
   const [transitionPhase, setTransitionPhase] = useState<TransitionPhase>('ready');
   const prevCountRef = useRef(medicines.length);

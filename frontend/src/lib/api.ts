@@ -1,4 +1,5 @@
 import type {
+  AppSettings,
   AiQueryStreamEvent,
   BatchParseResult,
   MedicineFilterStatus,
@@ -603,6 +604,21 @@ export async function getAiConfigStatus() {
       defaultModel: string;
     };
   }>('/ai/config-status');
+
+  return payload.data;
+}
+
+export async function getAppSettings() {
+  const payload = await request<{ data: AppSettings }>('/settings');
+  return payload.data;
+}
+
+export async function setTimezone(timezone: string) {
+  const payload = await request<{ data: AppSettings }>('/settings/timezone', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ timezone }),
+  });
 
   return payload.data;
 }

@@ -26,6 +26,7 @@ import {
   verifyFeishuWebhook,
   verifyTelegramBot,
 } from '../lib/api';
+import { useTimezone } from '../hooks/useTimezone';
 import type {
   DiscordChannelConfig,
   FeishuChannelConfig,
@@ -61,6 +62,38 @@ const notifyHourOptions = Array.from({ length: 24 }, (_, i) => i);
 type SettingsTab = 'ai' | 'general' | 'notifications' | 'about';
 type NotifyChannel = 'telegram' | 'discord' | 'feishu';
 
+function getAllTimezoneOptions() {
+  const fallback = [
+    'UTC',
+    'Asia/Shanghai',
+    'Asia/Hong_Kong',
+    'Asia/Tokyo',
+    'Asia/Singapore',
+    'Asia/Seoul',
+    'Australia/Sydney',
+    'Europe/London',
+    'Europe/Berlin',
+    'Europe/Paris',
+    'America/New_York',
+    'America/Chicago',
+    'America/Denver',
+    'America/Los_Angeles',
+    'America/Vancouver',
+  ];
+  const intlWithSupportedValues = Intl as typeof Intl & {
+    supportedValuesOf?: (key: string) => string[];
+  };
+
+  if (typeof intlWithSupportedValues.supportedValuesOf !== 'function') {
+    return fallback;
+  }
+
+  const supported = intlWithSupportedValues.supportedValuesOf('timeZone');
+  return Array.from(new Set(['UTC', ...supported])).sort((left, right) => left.localeCompare(right));
+}
+
+const allTimezoneOptions = getAllTimezoneOptions();
+
 const tabDescriptions: Record<SettingsTab, string> = {
   ai: '配置 AI 服务地址、模型和回答风格。留空时优先使用服务端 .env 中的默认值。',
   general: '调整界面主题、默认进入页面、列表样式和数据管理选项。',
@@ -90,6 +123,14 @@ export function SettingsModal({
   onImported,
   aiSetupPrompt = null,
 }: SettingsModalProps) {
+  const {
+    timezone,
+    configured: timezoneConfigured,
+    loading: timezoneLoading,
+    error: timezoneLoadError,
+    setTimezone,
+    detectTimezone,
+  } = useTimezone();
   const secondaryButtonClass =
     'theme-button-neutral rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-all disabled:cursor-not-allowed disabled:opacity-40';
   const primaryButtonClass =
@@ -111,7 +152,14 @@ export function SettingsModal({
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testStatus, setTestStatus] = useState('');
+  const [timezoneInput, setTimezoneInput] = useState(timezone);
+  const [timezoneSaving, setTimezoneSaving] = useState(false);
+  const [timezoneStatus, setTimezoneStatus] = useState('');
+  const [timezoneError, setTimezoneError] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const timezoneSelectOptions = allTimezoneOptions.includes(timezoneInput)
+    ? allTimezoneOptions
+    : [timezoneInput, ...allTimezoneOptions];
 
   // Telegram notification state
   const [tgChannel, setTgChannel] = useState<NotificationChannel | null>(null);
@@ -219,12 +267,15 @@ export function SettingsModal({
       setFsVerifying(false);
       setFsSaving(false);
       setFsTestingSend(false);
+      setTimezoneInput(timezone);
+      setTimezoneStatus('');
+      setTimezoneError('');
       void loadChannels();
     }
     return () => {
       linkAbortRef.current?.abort();
     };
-  }, [open, settings, loadChannels]);
+  }, [open, settings, loadChannels, timezone]);
 
   useEffect(() => {
     if (open) {
@@ -255,6 +306,46 @@ export function SettingsModal({
       setError(err instanceof Error ? err.message : '导出失败');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleTimezoneSave = async (nextTimezone: string) => {
+    const trimmedTimezone = nextTimezone.trim();
+
+    if (!trimmedTimezone) {
+      setTimezoneError('请输入有效的 IANA 时区，例如 Asia/Shanghai');
+      setTimezoneStatus('');
+      return;
+    }
+
+    setTimezoneSaving(true);
+    setTimezoneError('');
+    setTimezoneStatus('');
+
+    try {
+      const result = await setTimezone(trimmedTimezone);
+      setTimezoneInput(result.timezone);
+      setTimezoneStatus(`已切换为 ${result.timezone}`);
+    } catch (err) {
+      setTimezoneError(err instanceof Error ? err.message : '更新时区失败');
+    } finally {
+      setTimezoneSaving(false);
+    }
+  };
+
+  const handleTimezoneAutoDetect = async () => {
+    setTimezoneSaving(true);
+    setTimezoneError('');
+    setTimezoneStatus('');
+
+    try {
+      const result = await detectTimezone();
+      setTimezoneInput(result.timezone);
+      setTimezoneStatus(`已自动检测并保存为 ${result.timezone}`);
+    } catch (err) {
+      setTimezoneError(err instanceof Error ? err.message : '自动检测失败');
+    } finally {
+      setTimezoneSaving(false);
     }
   };
 
@@ -831,7 +922,7 @@ export function SettingsModal({
                                 ))}
                               </select>
                               <p className="mt-1.5 text-[11px] leading-4 text-ink2">
-                                每天此时检查过期药品并发送提醒（服务器时区）。
+                                每天按药箱时区 {timezone} 的此时间检查并发送提醒。
                               </p>
                             </div>
                           )}
@@ -970,7 +1061,7 @@ export function SettingsModal({
                                 ))}
                               </select>
                               <p className="mt-1.5 text-[11px] leading-4 text-ink2">
-                                每天此时检查过期药品并发送提醒（服务器时区）。
+                                每天按药箱时区 {timezone} 的此时间检查并发送提醒。
                               </p>
                             </div>
                           )}
@@ -1086,7 +1177,7 @@ export function SettingsModal({
                                 ))}
                               </select>
                               <p className="mt-1.5 text-[11px] leading-4 text-ink2">
-                                每天此时检查过期药品并发送提醒（服务器时区）。
+                                每天按药箱时区 {timezone} 的此时间检查并发送提醒。
                               </p>
                             </div>
                           )}
@@ -1311,6 +1402,80 @@ export function SettingsModal({
               </>
             ) : (
               <>
+                <section className={sectionClass}>
+                  <div className={sectionTitleClass}>业务时区</div>
+                  <div className="space-y-3">
+                    <div className="rounded-[10px] border border-border/60 bg-surface3 px-3 py-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[12px] font-medium text-ink">{timezone}</span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                            timezoneConfigured
+                              ? 'bg-status-ok-bg text-status-ok'
+                              : 'bg-status-warn-bg text-status-warn'
+                          }`}
+                        >
+                          {timezoneConfigured ? '已配置' : '自动回退'}
+                        </span>
+                        {timezoneLoading && (
+                          <span className="text-[11px] text-ink3">加载中...</span>
+                        )}
+                      </div>
+                      <p className="mt-2 text-[11px] leading-4 text-ink2">
+                        这个时区会同时影响过期判断、AI 问答里的“今天”以及每日提醒发送时间。
+                      </p>
+                      {timezoneLoadError && (
+                        <div className="mt-2 text-[12px] text-status-danger">{timezoneLoadError}</div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleTimezoneAutoDetect()}
+                        disabled={timezoneSaving}
+                        className={secondaryButtonClass}
+                      >
+                        {timezoneSaving ? '保存中...' : '自动检测当前浏览器时区'}
+                      </button>
+                    </div>
+
+                    <div>
+                      <div className={fieldLabelClass}>选择时区</div>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <select
+                          value={timezoneInput}
+                          onChange={(event) => setTimezoneInput(event.target.value)}
+                          className={inputClass}
+                        >
+                          {timezoneSelectOptions.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => void handleTimezoneSave(timezoneInput)}
+                          disabled={timezoneSaving}
+                          className={`${primaryButtonClass} sm:shrink-0`}
+                        >
+                          {timezoneSaving ? '保存中...' : '保存时区'}
+                        </button>
+                      </div>
+                      <p className="mt-2 text-[11px] leading-4 text-ink2">
+                        下拉中已汇集常见和完整时区列表；如果不确定，直接使用“自动检测当前浏览器时区”即可。
+                      </p>
+                      {timezoneStatus && (
+                        <div className="mt-2 text-[12px] text-status-ok">{timezoneStatus}</div>
+                      )}
+                      {timezoneError && (
+                        <div className="mt-2 text-[12px] text-status-danger">{timezoneError}</div>
+                      )}
+                    </div>
+                  </div>
+                </section>
+
                 <section className={sectionClass}>
                   <div className={sectionTitleClass}>显示偏好</div>
                   <div className="space-y-3">

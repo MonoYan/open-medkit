@@ -4,6 +4,12 @@ import { z } from 'zod';
 
 import { getDb } from './db/client';
 import { DEFAULT_CATEGORIES } from './db/schema';
+import {
+  canonicalizeTimezone,
+  getDateBoundaries as getTimezoneDateBoundaries,
+  getStoredTimezone,
+  setStoredTimezone,
+} from './utils/timezone';
 
 // ---------------------------------------------------------------------------
 // DB helpers (mirrors logic from routes/medicines.ts & ai/medicine.ts)
@@ -39,11 +45,9 @@ function rowToMedicine(row: MedicineRecord) {
 }
 
 function getDateBoundaries(expiringDays = 30) {
-  const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
-  const warning = new Date(today);
-  warning.setDate(warning.getDate() + expiringDays);
-  return { todayStr, warningDateStr: warning.toISOString().slice(0, 10) };
+  const db = getDb();
+  const { timezone } = getStoredTimezone(db);
+  return getTimezoneDateBoundaries(timezone, expiringDays);
 }
 
 function getMergedCategories() {
@@ -158,8 +162,37 @@ function computeStats(expiringDays = 30) {
   };
 }
 
+function getTimezoneMeta() {
+  const db = getDb();
+  const { timezone, configured } = getStoredTimezone(db);
+
+  return {
+    timezone,
+    configured,
+    warning: configured
+      ? undefined
+      : '时区尚未初始化。MedKit 当前使用 UTC 而不是服务器本地时区。请先使用 set_timezone 工具完成初始化。',
+  };
+}
+
+function attachMeta(data: unknown) {
+  const meta = getTimezoneMeta();
+
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    return {
+      ...data,
+      _meta: meta,
+    };
+  }
+
+  return {
+    data,
+    _meta: meta,
+  };
+}
+
 function textResult(data: unknown) {
-  return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(attachMeta(data), null, 2) }] };
 }
 
 function errorResult(message: string) {
@@ -178,6 +211,64 @@ const server = new McpServer({
 // ---------------------------------------------------------------------------
 // Tools
 // ---------------------------------------------------------------------------
+
+server.tool(
+  'get_settings',
+  '获取当前与 MCP 使用相关的 MedKit 设置，包括业务时区是否已经初始化。',
+  {},
+  async () => {
+    try {
+      const meta = getTimezoneMeta();
+      return textResult({
+        timezone: meta.timezone,
+        configured: meta.configured,
+        guidance: meta.configured
+          ? '时区已配置，后续的过期判断、AI 中的“今天”以及通知调度都会使用这个时区。'
+          : '时区尚未初始化，OpenMedKit 当前使用 UTC 而不是服务器本地时区。请运行 set_timezone，并传入 IANA 时区，例如 "Asia/Shanghai"。',
+      });
+    } catch (err) {
+      return errorResult(err instanceof Error ? err.message : '获取设置失败');
+    }
+  },
+);
+
+server.tool(
+  'set_timezone',
+  '初始化或更新 OpenMedKit 的业务时区。这个时区会用于过期判断、AI 中的“今天”以及通知调度。',
+  {
+    timezone: z
+      .string()
+      .trim()
+      .min(1, '时区不能为空')
+      .describe('IANA 时区，例如 Asia/Shanghai 或 America/New_York'),
+  },
+  async ({ timezone }) => {
+    try {
+      const canonicalTimezone = canonicalizeTimezone(timezone);
+
+      if (!canonicalTimezone) {
+        return errorResult(`无效的时区：${timezone}`);
+      }
+
+      const db = getDb();
+      const transaction = db.transaction(() => {
+        setStoredTimezone(db, canonicalTimezone);
+        db.prepare('UPDATE notification_channels SET last_notified_date = NULL').run();
+      });
+
+      transaction();
+
+      return textResult({
+        timezone: canonicalTimezone,
+        configured: true,
+        message:
+          '时区已保存。后续的过期判断、AI 日期上下文和通知调度都会使用这个时区。',
+      });
+    } catch (err) {
+      return errorResult(err instanceof Error ? err.message : '设置时区失败');
+    }
+  },
+);
 
 server.tool(
   'list_medicines',
@@ -421,6 +512,32 @@ server.tool(
 // ---------------------------------------------------------------------------
 
 server.resource(
+  'settings',
+  'medkit://settings',
+  { description: '当前与 MedKit MCP 使用相关的设置，包括业务时区状态。', mimeType: 'application/json' },
+  async () => {
+    const meta = getTimezoneMeta();
+
+    return {
+      contents: [
+        {
+          uri: 'medkit://settings',
+          text: JSON.stringify(
+            {
+              timezone: meta.timezone,
+              configured: meta.configured,
+              warning: meta.warning,
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
+  },
+);
+
+server.resource(
   'medicines',
   'medkit://medicines',
   { description: 'Full list of all medicines in the medkit as JSON', mimeType: 'application/json' },
@@ -448,6 +565,13 @@ server.resource(
 // ---------------------------------------------------------------------------
 
 async function main() {
+  const meta = getTimezoneMeta();
+  if (!meta.configured) {
+    console.error(
+      `[mcp] 时区尚未初始化，当前为 ${meta.timezone}。请使用 "set_timezone" 工具完成初始化。`,
+    );
+  }
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('MedKit MCP server running on stdio');

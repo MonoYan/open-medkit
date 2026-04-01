@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { LayoutGrid, List, Pencil, RefreshCw, RotateCcw, Search, Trash2 } from 'lucide-react';
 
 import type { Medicine, MedicineFilterStatus, Stats } from '../types';
+import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, getMedicineStatus, getStatusText, daysUntilExpiry } from '../lib/utils';
 import { MedCard } from './MedCard';
 
@@ -47,6 +48,7 @@ export function MedGrid({
   onDeleteMedicine,
   onRefresh,
 }: MedGridProps) {
+  const { timezone } = useTimezone();
   const [refreshing, setRefreshing] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>('expires');
   const [viewMode, setViewMode] = useState<ViewMode>(defaultViewMode);
@@ -314,8 +316,10 @@ export function MedGrid({
             </thead>
             <tbody>
               {sortedMedicines.map((medicine) => {
-                const status = getMedicineStatus(medicine.expires_at, expiringDays);
-                const days = medicine.expires_at ? daysUntilExpiry(medicine.expires_at) : undefined;
+                const status = getMedicineStatus(medicine.expires_at, timezone, expiringDays);
+                const days = medicine.expires_at
+                  ? daysUntilExpiry(medicine.expires_at, timezone)
+                  : undefined;
                 const badgeClass =
                   status === 'expired'
                     ? 'bg-status-danger-bg text-status-danger'

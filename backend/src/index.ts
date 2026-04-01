@@ -10,6 +10,7 @@ import { getDb } from './db/client';
 import { aiRouter } from './routes/ai';
 import { medicinesRouter } from './routes/medicines';
 import { notificationsRouter } from './routes/notifications';
+import { settingsRouter } from './routes/settings';
 import { startNotificationScheduler } from './services/notifier';
 
 const app = new Hono();
@@ -104,6 +105,7 @@ app.use('*', cors());
 app.route('/api/medicines', medicinesRouter);
 app.route('/api/ai', aiRouter);
 app.route('/api/notifications', notificationsRouter);
+app.route('/api/settings', settingsRouter);
 
 if (isProduction) {
   const frontendDist = getFrontendDistPath();

@@ -1,5 +1,11 @@
 import type { SqliteDatabase } from '../db/client';
 import { getDb } from '../db/client';
+import {
+  getCurrentHour,
+  getDateBoundaries,
+  getStoredTimezone,
+  getTodayStr,
+} from '../utils/timezone';
 import * as telegram from './telegram';
 import * as discord from './discord';
 import * as feishu from './feishu';
@@ -54,9 +60,11 @@ interface MedicineRow {
 }
 
 function daysUntil(dateStr: string, today: string): number {
-  const d = new Date(dateStr);
-  const t = new Date(today);
-  return Math.ceil((d.getTime() - t.getTime()) / (1000 * 60 * 60 * 24));
+  const [dateYear, dateMonth, dateDay] = dateStr.split('-').map(Number);
+  const [todayYear, todayMonth, todayDay] = today.split('-').map(Number);
+  const d = Date.UTC(dateYear, dateMonth - 1, dateDay);
+  const t = Date.UTC(todayYear, todayMonth - 1, todayDay);
+  return Math.ceil((d - t) / (1000 * 60 * 60 * 24));
 }
 
 export type MessageFormat = 'html' | 'markdown' | 'plain';
@@ -114,12 +122,8 @@ interface ChannelRow {
   last_notified_date: string | null;
 }
 
-function queryExpiringMedicines(db: SqliteDatabase, expiringDays = 30) {
-  const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
-  const futureDate = new Date(today);
-  futureDate.setDate(futureDate.getDate() + expiringDays);
-  const futureDateStr = futureDate.toISOString().slice(0, 10);
+function queryExpiringMedicines(db: SqliteDatabase, timezone: string, expiringDays = 30) {
+  const { todayStr, warningDateStr: futureDateStr } = getDateBoundaries(timezone, expiringDays);
 
   const expired = db
     .prepare(
@@ -153,7 +157,8 @@ export async function sendNotificationNow(channelType: string): Promise<string> 
   const sender = senders[channelType];
   if (!sender) throw new Error(`Unknown channel type: ${channelType}`);
 
-  const { expired, expiring, todayStr } = queryExpiringMedicines(db);
+  const { timezone } = getStoredTimezone(db);
+  const { expired, expiring, todayStr } = queryExpiringMedicines(db, timezone);
 
   if (expired.length === 0 && expiring.length === 0) {
     return '当前没有过期或即将过期的药品，无需发送提醒。';
@@ -173,9 +178,9 @@ let intervalId: ReturnType<typeof setInterval> | null = null;
 async function tick() {
   try {
     const db = getDb();
-    const now = new Date();
-    const currentHour = now.getHours();
-    const todayStr = now.toISOString().slice(0, 10);
+    const { timezone } = getStoredTimezone(db);
+    const currentHour = getCurrentHour(timezone);
+    const todayStr = getTodayStr(timezone);
 
     const channels = db
       .prepare('SELECT * FROM notification_channels WHERE enabled = 1')
@@ -189,7 +194,7 @@ async function tick() {
       const sender = senders[ch.channel_type];
       if (!sender) continue;
 
-      const { expired, expiring } = queryExpiringMedicines(db);
+      const { expired, expiring } = queryExpiringMedicines(db, timezone);
       if (expired.length === 0 && expiring.length === 0) {
         db.prepare(
           'UPDATE notification_channels SET last_notified_date = ? WHERE channel_type = ?',

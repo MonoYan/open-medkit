@@ -2,6 +2,10 @@ import { Hono } from 'hono';
 
 import { getDb } from '../db/client';
 import { DEFAULT_CATEGORIES } from '../db/schema';
+import {
+  getDateBoundaries,
+  getStoredTimezone,
+} from '../utils/timezone';
 
 interface MedicineRecord {
   id: number;
@@ -40,16 +44,6 @@ function normalizeExpiringDays(value?: string) {
   return 30;
 }
 
-function getDateBoundaries(expiringDays = 30) {
-  const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
-  const warningDate = new Date(today);
-  warningDate.setDate(warningDate.getDate() + expiringDays);
-  const warningDateStr = warningDate.toISOString().slice(0, 10);
-
-  return { todayStr, warningDateStr };
-}
-
 function normalizeMedicineInput(input: Partial<MedicineInput>) {
   return {
     name: input.name?.trim() || '',
@@ -86,7 +80,8 @@ medicinesRouter.get('/', (c) => {
     const category = c.req.query('category');
     const status = c.req.query('status');
     const expiringDays = normalizeExpiringDays(c.req.query('expiringDays'));
-    const { todayStr, warningDateStr } = getDateBoundaries(expiringDays);
+    const { timezone } = getStoredTimezone(db);
+    const { todayStr, warningDateStr } = getDateBoundaries(timezone, expiringDays);
 
     const conditions: string[] = [];
     const params: string[] = [];
@@ -130,7 +125,8 @@ medicinesRouter.get('/stats', (c) => {
   try {
     const db = getDb();
     const expiringDays = normalizeExpiringDays(c.req.query('expiringDays'));
-    const { todayStr, warningDateStr } = getDateBoundaries(expiringDays);
+    const { timezone } = getStoredTimezone(db);
+    const { todayStr, warningDateStr } = getDateBoundaries(timezone, expiringDays);
 
     const totals = db
       .prepare(

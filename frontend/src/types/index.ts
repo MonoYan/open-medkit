@@ -39,6 +39,11 @@ export interface Settings {
   themePreference: ThemePreference;
 }
 
+export interface AppSettings {
+  timezone: string;
+  configured: boolean;
+}
+
 export interface BatchParseResult {
   results: {
     index: number;
