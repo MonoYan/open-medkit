@@ -216,3 +216,9 @@ open-medkit/
 ## License
 
 MIT
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=MonoYan/open-medkit&type=Date)](https://star-history.com/#MonoYan/open-medkit&Date)
+
+Powered by [Star History](https://github.com/star-history)
