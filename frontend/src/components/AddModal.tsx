@@ -1402,7 +1402,10 @@ export function AddModal({
   };
 
   // --- Determine if submit is allowed ---
-  const canSubmitSingle = isSingleAiMode ? animPhase === 'ready' : true;
+  const hasSingleName = draft.name.trim().length > 0;
+  const validBatchCount = batchItems.filter((item) => item.success && item.form.name.trim()).length;
+  const canSubmitSingle = hasSingleName && (!isSingleAiMode || animPhase === 'ready');
+  const canSubmitBatch = animPhase === 'ready' && validBatchCount > 0;
 
   // -----------------------------------------------------------------------
   // Render
@@ -1815,17 +1818,14 @@ export function AddModal({
                   void (isBatchReview ? handleSaveBatch() : handleSaveSingle())
                 }
                 disabled={
-                  saving ||
-                  animPhase !== 'ready' ||
-                  (isBatchReview && batchItems.length === 0) ||
-                  (isSingleAiMode && !canSubmitSingle)
+                  saving || (isBatchReview ? !canSubmitBatch : !canSubmitSingle)
                 }
                 className="rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-white transition-all hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {saving
                   ? '保存中...'
                   : isBatchReview
-                    ? `全部添加 (${batchItems.filter((i) => i.success).length}条)`
+                    ? `全部添加 (${validBatchCount}条)`
                     : '确认添加'}
               </button>
             </>
