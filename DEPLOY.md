@@ -18,17 +18,26 @@ Edit `.env`:
 AI_API_KEY=sk-your-key-here
 AI_BASE_URL=https://api.openai.com   # or any OpenAI-compatible endpoint
 AI_MODEL=gpt-4o-mini
+MEDKIT_PORT=3000
+# HTTPS_PROXY can still use http://proxy-host:port here; that is the proxy protocol, not the target site's protocol.
+# HTTP_PROXY: use for HTTP targets
+# HTTP_PROXY=http://192.168.31.1:7890
+# HTTPS_PROXY: use for HTTPS targets
+# HTTPS_PROXY=http://192.168.31.1:7890
+# NO_PROXY: bypass proxy for local / internal hosts
+# NO_PROXY=localhost,127.0.0.1,.local
 ```
 
 > **Note**: AI config is optional at deploy time. Users can configure it later in the browser Settings panel.
+> `MEDKIT_PORT` only changes the host port exposed by Docker Compose. The container still listens on `3000`.
 
 ### 2. Start
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-App is now running at http://your-server-ip:3000.
+App is now running at `http://your-server-ip:3000` by default. If you changed `MEDKIT_PORT`, use that host port instead.
 
 ### 3. Update
 
@@ -113,12 +122,13 @@ Caddy handles HTTPS certificates automatically.
 
 ## Custom Port
 
-Change the port mapping in `docker-compose.yml`:
+For Docker Compose, set `MEDKIT_PORT` in `.env`:
 
-```yaml
-ports:
-  - "8080:3000"  # host:container
+```env
+MEDKIT_PORT=8080
 ```
+
+This changes the host port only; the container still listens on `3000`.
 
 Or set `PORT` env var if running without Docker:
 

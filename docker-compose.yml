@@ -3,14 +3,16 @@ services:
     build: .
     container_name: medkit
     ports:
-      - "3000:3000"
+      - "${MEDKIT_PORT:-3000}:3000"
     volumes:
       - medkit-data:/data
     environment:
       - AI_API_KEY=${AI_API_KEY:-}
       - AI_BASE_URL=${AI_BASE_URL:-https://api.openai.com}
       - AI_MODEL=${AI_MODEL:-gpt-4o-mini}
+      - HTTP_PROXY=${HTTP_PROXY:-}
       - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-}
     restart: unless-stopped
 
 volumes:

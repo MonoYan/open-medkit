@@ -38,7 +38,7 @@ Open MedKit 让你用**一句话**把药品录入药箱，用**一句话**从药
 | **问一句话就找药** | 「有退烧药吗」「快过期的有哪些」—— 像聊天一样检索药箱 |
 | **过期自动提醒** | 到期 / 即将到期药品自动标记高亮，支持 Telegram / Discord / 飞书每日推送 |
 | **Agent 原生接入** | 内置 [MCP Server](./MCP.md)，Claude Code / Cursor / Claude Desktop / OpenClaw 直接调用 tool 管理药箱 |
-| **一行命令自部署** | `docker compose up -d`，药箱数据默认保存在本地 SQLite；启用 AI 或通知时仅与对应服务通信 |
+| **一行命令自部署** | `docker compose up -d --build`，药箱数据默认保存在本地 SQLite；启用 AI 或通知时仅与对应服务通信 |
 | **兼容任意 AI** | OpenAI、Deepseek、Ollama…… 任何兼容 `/v1/chat/completions` 的 API 均可 |
 
 ### See it in action
@@ -81,11 +81,13 @@ Open MedKit 让你用**一句话**把药品录入药箱，用**一句话**从药
 git clone https://github.com/MonoYan/open-medkit.git
 cd open-medkit
 cp .env.example .env
-# Edit .env — set your AI_API_KEY at minimum
-docker compose up -d
+# Optional: edit .env to set AI defaults, MEDKIT_PORT, or proxy vars
+docker compose up -d --build
 ```
 
-Open http://localhost:3000.
+Open `http://localhost:3000` by default. If you change `MEDKIT_PORT` in `.env`, use that host port instead.
+
+AI config is optional at deploy time. You can leave it blank and configure the provider later in the browser Settings panel.
 
 首次打开 Web UI 时，应用会自动检测当前浏览器时区并写入服务端；后续的过期判断、AI 问答中的“今天”以及每日提醒时间都会以这个业务时区为准。
 
@@ -109,14 +111,19 @@ Frontend runs on http://localhost:5173, backend on http://localhost:3000.
 
 All AI config can also be set in the browser Settings panel. Values entered there are stored in the current browser's `localStorage` and take priority over env vars.
 
+`MEDKIT_PORT` only affects Docker Compose host port mapping. `PORT` and `DB_PATH` are for source / non-Docker runs.
+
 | Env Variable | Default | Description |
 |---|---|---|
 | `AI_API_KEY` | — | OpenAI-compatible API key |
 | `AI_BASE_URL` | `https://api.openai.com` | API base URL |
 | `AI_MODEL` | `gpt-4o-mini` | Model name |
-| `PORT` | `3000` | Server port |
-| `DB_PATH` | `./data/medicine.db` | SQLite database path |
-| `HTTPS_PROXY` | — | HTTP(S) proxy for outbound requests (Telegram / Discord / Lark API, etc.) |
+| `MEDKIT_PORT` | `3000` | Host port exposed by `docker compose` |
+| `PORT` | `3000` | Server port when running from source without Docker |
+| `DB_PATH` | `./data/medicine.db` | SQLite database path when running from source without Docker |
+| `HTTP_PROXY` | — | Optional HTTP proxy for outbound requests |
+| `HTTPS_PROXY` | — | Optional HTTPS proxy for outbound requests |
+| `NO_PROXY` | — | Comma-separated hosts that should bypass the proxy |
 
 ## Privacy & Safety
 
@@ -134,7 +141,7 @@ See [DEPLOY.md](./DEPLOY.md) for detailed deployment guide.
 **TL;DR** — any machine that runs Docker:
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
 Data is persisted in a Docker volume (`medkit-data`). To back up:

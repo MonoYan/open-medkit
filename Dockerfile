@@ -1,26 +1,39 @@
-FROM node:20-alpine AS frontend-builder
-WORKDIR /app/frontend
-COPY frontend/package*.json ./
-RUN npm ci
-COPY frontend/ ./
-RUN npm run build
-
-FROM node:20-alpine AS backend-builder
-WORKDIR /app/backend
-COPY backend/package*.json ./
-RUN npm ci
-COPY backend/ ./
-RUN npm run build
-
-FROM node:20-alpine
+FROM node:20-alpine AS deps
 WORKDIR /app
 
 RUN apk add --no-cache python3 make g++
 
-COPY --from=backend-builder /app/backend/dist ./dist
-COPY --from=backend-builder /app/backend/node_modules ./node_modules
-COPY --from=backend-builder /app/backend/package.json ./
-COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+COPY package.json package-lock.json ./
+COPY backend/package.json ./backend/package.json
+COPY frontend/package.json ./frontend/package.json
+
+RUN npm ci
+
+FROM deps AS build
+
+COPY backend ./backend
+COPY frontend ./frontend
+
+RUN npm run build
+
+FROM node:20-alpine AS prod-deps
+WORKDIR /app
+
+RUN apk add --no-cache python3 make g++
+
+COPY package.json package-lock.json ./
+COPY backend/package.json ./backend/package.json
+COPY frontend/package.json ./frontend/package.json
+
+RUN npm ci --omit=dev --workspace backend
+
+FROM node:20-alpine AS runtime
+WORKDIR /app
+
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY --from=prod-deps /app/backend/package.json ./backend/package.json
+COPY --from=build /app/backend/dist ./dist
+COPY --from=build /app/frontend/dist ./frontend/dist
 
 RUN mkdir -p /data
 
