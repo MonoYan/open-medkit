@@ -1,13 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  AlignJustify,
   AlertTriangle,
   Bell,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Cpu,
   ExternalLink,
   Info,
+  LayoutGrid,
   MessageSquareText,
+  Monitor,
+  Moon,
   Search,
   Server,
   Shield,
+  SlidersHorizontal,
+  Smartphone,
+  Sun,
   X,
 } from 'lucide-react';
 
@@ -42,9 +54,12 @@ const homeTabOptions = [
 ] as const;
 
 const listViewOptions = [
-  { value: 'grid', label: '卡片视图', description: '更适合快速浏览药品信息。' },
-  { value: 'list', label: '表格视图', description: '一屏看到更多字段和条目。' },
+  { value: 'grid', label: '卡片视图', description: '适合快速浏览药品关键信息。' },
+  { value: 'list', label: '表格视图', description: '一屏看到更多字段和明细条目。' },
 ] as const;
+
+const themeIconMap = { system: Smartphone, light: Sun, dark: Moon } as const;
+const listViewIconMap = { grid: LayoutGrid, list: AlignJustify } as const;
 
 const aiStyleOptions = [
   { value: 'concise', label: '简洁', description: '优先给结论，回答更短更直接。' },
@@ -59,7 +74,7 @@ const themeOptions = [
 
 const reminderDayOptions = [7, 15, 30, 60] as const;
 const notifyHourOptions = Array.from({ length: 24 }, (_, i) => i);
-type SettingsTab = 'ai' | 'general' | 'notifications' | 'about';
+type SettingsTab = 'ai' | 'general' | 'notifications' | 'about' | 'privacy' | 'disclaimer';
 type NotifyChannel = 'telegram' | 'discord' | 'feishu';
 
 function getAllTimezoneOptions() {
@@ -98,8 +113,19 @@ const tabDescriptions: Record<SettingsTab, string> = {
   ai: '配置 AI 服务地址、模型和回答风格。留空时优先使用服务端 .env 中的默认值。',
   general: '调整界面主题、默认进入页面、列表样式和数据管理选项。',
   notifications: '管理 Telegram、Discord、飞书等提醒渠道与每日过期通知的发送时间。',
-  about: '简要说明产品用途，并提示使用风险与免责声明。',
+  about: '产品简介、功能亮点与技术栈。',
+  privacy: '药箱数据的存储方式与 AI / 通知功能的外发说明。',
+  disclaimer: '使用限制、AI 输出局限性与用药安全提醒。',
 };
+
+const settingsTabs = [
+  { id: 'ai' as SettingsTab, label: 'AI 配置', icon: Cpu },
+  { id: 'general' as SettingsTab, label: '通用设置', icon: SlidersHorizontal },
+  { id: 'notifications' as SettingsTab, label: '通知提醒', icon: Bell },
+  { id: 'about' as SettingsTab, label: '关于系统', icon: Info },
+  { id: 'privacy' as SettingsTab, label: '数据隐私', icon: Shield },
+  { id: 'disclaimer' as SettingsTab, label: '免责声明', icon: AlertTriangle },
+];
 
 interface SettingsModalProps {
   open: boolean;
@@ -146,6 +172,7 @@ export function SettingsModal({
     'theme-input w-full rounded-[10px] border px-3 py-2 text-[13px] outline-none transition';
   const [form, setForm] = useState(settings);
   const [activeTab, setActiveTab] = useState<SettingsTab>('ai');
+  const [mobileView, setMobileView] = useState<'nav' | 'content'>('nav');
   const [activeNotifyChannel, setActiveNotifyChannel] = useState<NotifyChannel>('telegram');
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
@@ -156,6 +183,7 @@ export function SettingsModal({
   const [timezoneSaving, setTimezoneSaving] = useState(false);
   const [timezoneStatus, setTimezoneStatus] = useState('');
   const [timezoneError, setTimezoneError] = useState('');
+  const [timezoneEditing, setTimezoneEditing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const timezoneSelectOptions = allTimezoneOptions.includes(timezoneInput)
     ? allTimezoneOptions
@@ -270,6 +298,7 @@ export function SettingsModal({
       setTimezoneInput(timezone);
       setTimezoneStatus('');
       setTimezoneError('');
+      setTimezoneEditing(false);
       void loadChannels();
     }
     return () => {
@@ -280,8 +309,9 @@ export function SettingsModal({
   useEffect(() => {
     if (open) {
       setActiveTab('ai');
+      setMobileView(aiSetupPrompt ? 'content' : 'nav');
     }
-  }, [open]);
+  }, [open, aiSetupPrompt]);
 
   if (!open) {
     return null;
@@ -665,139 +695,175 @@ export function SettingsModal({
     selected
       ? 'border-accent/30 bg-accent/10 shadow-[0_10px_30px_rgba(200,75,47,0.08)]'
       : 'border-border/60 bg-surface hover:border-border-strong/80 hover:bg-surface3';
-  const getTabButtonClass = (selected: boolean) =>
-    `rounded-full px-3 py-1.5 text-[12px] font-medium transition-all duration-200 ${
-      selected
-        ? 'bg-header text-white shadow-[0_10px_24px_rgba(26,22,18,0.12)]'
-        : 'text-ink2 hover:bg-surface hover:text-ink'
-    }`;
+  const activeTabLabel = settingsTabs.find((t) => t.id === activeTab)?.label ?? '';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/60 p-2.5 sm:p-3">
-      <div className="absolute inset-0" onClick={onClose} aria-hidden="true" />
-      <div className="theme-modal-shell relative z-10 flex max-h-[calc(100vh-1rem)] w-full max-w-[860px] flex-col rounded-[18px] border p-3.5 sm:max-h-[calc(100vh-1.5rem)] sm:p-4">
-        <div className="flex items-start justify-between gap-2.5">
-          <div>
-            <h2 className="text-[21px] font-semibold text-ink sm:text-[23px]">设置</h2>
-            <p className="mt-1 max-w-[58ch] text-[12px] leading-[1.45] text-ink2">
-              {tabDescriptions[activeTab]}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="关闭设置"
-            className="theme-icon-button rounded-full border p-1.5 transition-all duration-200"
-          >
-            <X aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
-          </button>
-        </div>
-
-        <div className="mt-4 flex min-h-0 flex-col overflow-hidden">
-          <div className="inline-flex w-fit rounded-full border border-border/50 bg-surface4 p-1">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-overlay/60 md:items-center md:p-3">
+      <div className="absolute inset-0" aria-hidden="true" />
+      <div className="theme-modal-shell relative z-10 flex h-[calc(100dvh-2rem)] w-full max-w-[860px] flex-col overflow-hidden rounded-t-[20px] border md:h-auto md:max-h-[calc(100vh-1.5rem)] md:flex-row md:rounded-[18px]">
+        {/* Sidebar navigation */}
+        <aside
+          className={`shrink-0 p-4 md:flex md:w-[200px] md:flex-col md:border-r md:border-border/40 md:px-3 md:py-5 ${
+            mobileView === 'nav' ? 'flex flex-col' : 'hidden'
+          } md:!flex`}
+        >
+          <div className="flex items-start justify-between md:mb-1 md:block md:px-2.5">
+            <div className="mb-4 md:mb-0">
+              <h2 className="text-[18px] font-semibold text-ink md:text-[15px]">设置</h2>
+              <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.15em] text-ink3">
+                Preferences
+              </p>
+            </div>
             <button
               type="button"
-              onClick={() => setActiveTab('ai')}
-              className={getTabButtonClass(activeTab === 'ai')}
+              onClick={onClose}
+              aria-label="关闭设置"
+              className="theme-icon-button rounded-full border p-1.5 transition-all duration-200 md:hidden"
             >
-              AI配置
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('general')}
-              className={getTabButtonClass(activeTab === 'general')}
-            >
-              通用
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('notifications')}
-              className={getTabButtonClass(activeTab === 'notifications')}
-            >
-              通知
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('about')}
-              className={getTabButtonClass(activeTab === 'about')}
-            >
-              关于
+              <X aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
             </button>
           </div>
+          <nav className="flex flex-col gap-0.5">
+            {settingsTabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setMobileView('content');
+                    setStatus('');
+                    setError('');
+                    setTestStatus('');
+                  }}
+                  className={`flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-[13px] font-medium transition-all duration-200 ${
+                    isActive
+                      ? 'bg-accent/10 text-accent'
+                      : 'text-ink2 hover:bg-surface2 hover:text-ink'
+                  }`}
+                >
+                  <Icon className="h-[15px] w-[15px] shrink-0" strokeWidth={1.8} />
+                  <span className="flex-1 text-left">{tab.label}</span>
+                  <ChevronRight
+                    className="h-4 w-4 shrink-0 text-ink3/40 md:hidden"
+                    strokeWidth={1.5}
+                  />
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
 
-          <div className="mt-3 min-h-0 space-y-2.5 overflow-y-auto pr-1">
+        {/* Content area */}
+        <div
+          className={`flex min-h-0 flex-1 flex-col ${
+            mobileView === 'content' ? '' : 'hidden'
+          } md:!flex`}
+        >
+          {/* Content header */}
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/40 px-4 py-3">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setMobileView('nav')}
+                className="inline-flex shrink-0 items-center text-ink2 transition-colors hover:text-ink md:hidden"
+              >
+                <ChevronLeft className="h-5 w-5" strokeWidth={1.8} />
+              </button>
+              <div className="min-w-0">
+                <h3 className="truncate text-[16px] font-semibold leading-tight text-ink">
+                  {activeTabLabel}
+                </h3>
+                <p className="mt-0.5 hidden truncate text-[11px] leading-[1.4] text-ink3 md:block">
+                  {tabDescriptions[activeTab]}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="关闭设置"
+              className="theme-icon-button shrink-0 rounded-full border p-1.5 transition-all duration-200"
+            >
+              <X aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
+            </button>
+          </div>
+
+          {/* Scrollable content */}
+          <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-3.5 md:p-4">
             {activeTab === 'about' ? (
-              <>
-                <section className="theme-panel rounded-[16px] border p-4 sm:p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <img
-                        src="/medkit-icon-rounded.png"
-                        alt="Open MedKit"
-                        className="h-10 w-10 shrink-0 rounded-[12px]"
-                      />
+              <div className="space-y-6">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src="/medkit-icon-rounded.png"
+                      alt="Open MedKit"
+                      className="h-10 w-10 shrink-0 rounded-[12px]"
+                    />
+                    <div>
+                      <h3 className="text-[18px] font-semibold leading-tight text-ink sm:text-[20px]">
+                        Open MedKit
+                      </h3>
+                      <p className="mt-0.5 font-mono text-[10px] tracking-wide text-ink3">
+                        MIT License · Open Source 
+                      </p>
+                    </div>
+                  </div>
+                  <a
+                    href="https://github.com/MonoYan/open-medkit"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="theme-button-neutral flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-all"
+                  >
+                    GitHub
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+
+                <p className="text-[13px] leading-[1.7] text-ink2">
+                  用自然语言录入和检索家中常备药，AI 自动提取结构化信息并追踪有效期，让你不再忘药、过期、找不到。
+                </p>
+
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {[
+                    { icon: MessageSquareText, title: '说一句话就入库', desc: 'AI 提取名称、规格、有效期，确认即入库' },
+                    { icon: Search, title: '问一句话就找药', desc: '像聊天一样检索你的药箱' },
+                    { icon: Bell, title: '过期自动提醒', desc: '到期药品高亮标记，支持 Telegram / Discord / 飞书推送' },
+                    {
+                      icon: Server,
+                      title: 'MCP Server',
+                      desc: '内置 MCP Server，通过 Claude Code, OpenClaw 等直接管理药箱',
+                    },
+                  ].map((f) => (
+                    <div
+                      key={f.title}
+                      className="flex items-start gap-2.5 rounded-[10px] border border-border/40 bg-surface3 p-2.5"
+                    >
+                      <f.icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink3" strokeWidth={1.8} />
                       <div>
-                        <h3 className="text-[18px] font-semibold leading-tight text-ink sm:text-[20px]">
-                          Open MedKit
-                        </h3>
-                        <p className="mt-0.5 font-mono text-[10px] tracking-wide text-ink3">
-                          MIT License · Open Source
-                        </p>
+                        <div className="text-[12px] font-medium leading-snug text-ink">{f.title}</div>
+                        <div className="mt-0.5 text-[11px] leading-[1.4] text-ink3">{f.desc}</div>
                       </div>
                     </div>
-                    <a
-                      href="https://github.com/MonoYan/open-medkit"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="theme-button-neutral flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-all"
-                    >
-                      GitHub
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </div>
+                  ))}
+                </div>
 
-                  <p className="mt-3.5 max-w-full overflow-x-auto whitespace-nowrap text-[13px] leading-[1.7] text-ink2">
-                    用自然语言录入和检索家中常备药，AI 自动提取结构化信息并追踪有效期，让你不再忘药、过期、找不到。
-                  </p>
-
-                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                    {[
-                      { icon: MessageSquareText, title: '说一句话就入库', desc: 'AI 提取名称、规格、有效期，确认即入库' },
-                      { icon: Search, title: '问一句话就找药', desc: '像聊天一样检索你的药箱' },
-                      { icon: Bell, title: '过期自动提醒', desc: '到期药品高亮标记，支持 Telegram / Discord / 飞书推送' },
-                      {
-                        icon: Server,
-                        title: '一行命令自部署',
-                        desc: '药箱数据默认保存在本地 SQLite；启用 AI 或通知时会与服务通信',
-                      },
-                    ].map((f) => (
-                      <div
-                        key={f.title}
-                        className="flex items-start gap-2.5 rounded-[10px] border border-border/40 bg-surface3 p-2.5"
+                <div className="flex flex-wrap gap-1.5">
+                  {['React', 'Vite', 'TypeScript', 'Hono', 'SQLite', 'TailwindCSS', 'Docker', 'MCP'].map(
+                    (tech) => (
+                      <span
+                        key={tech}
+                        className="rounded-full border border-border/50 bg-surface4 px-2 py-0.5 font-mono text-[10px] text-ink3"
                       >
-                        <f.icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink3" strokeWidth={1.8} />
-                        <div>
-                          <div className="text-[12px] font-medium leading-snug text-ink">{f.title}</div>
-                          <div className="mt-0.5 text-[11px] leading-[1.4] text-ink3">{f.desc}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                        {tech}
+                      </span>
+                    ),
+                  )}
+                </div>
 
-                  <div className="mt-4 flex flex-wrap gap-1.5">
-                    {['React', 'TypeScript', 'Hono', 'SQLite', 'TailwindCSS', 'Docker'].map(
-                      (tech) => (
-                        <span
-                          key={tech}
-                          className="rounded-full border border-border/50 bg-surface4 px-2 py-0.5 font-mono text-[10px] text-ink3"
-                        >
-                          {tech}
-                        </span>
-                      ),
-                    )}
-                  </div>
-
-                  <div className="mt-4 border-t border-border/30 pt-3 text-[12px] text-ink3">
+                  <div className="mt-4 border-t border-border/30 pt-3 text-[12px] text-ink3 text-center">
                     Made by{' '}
                     <a
                       href="https://x.com/sensh85"
@@ -808,37 +874,9 @@ export function SettingsModal({
                       @sensh85
                     </a>
                   </div>
-                </section>
+                </div>
+                  
 
-                <section className="flex items-start gap-2.5 rounded-[12px] border border-status-ok/15 bg-status-ok-bg/60 p-3 sm:p-3.5">
-                  <Shield className="mt-0.5 h-4 w-4 shrink-0 text-status-ok" strokeWidth={1.8} />
-                  <div>
-                    <div className="text-[12px] font-semibold text-ink">数据隐私与外发说明</div>
-                    <ul className="mt-1.5 space-y-1 text-[12px] leading-[1.65] text-ink2">
-                      <li>药箱数据默认保存在当前部署环境的 SQLite 中；未启用 AI 和通知时不会主动发送到外部服务。</li>
-                      <li>使用 AI 解析、拍照识别或问答时，输入文本、图片，以及 AI 问答所需的当前药箱数据会发送到你配置的模型接口。</li>
-                      <li>浏览器设置里填写的 AI Base URL、API Key 和模型名会保存在当前浏览器的 localStorage 中，并在每次 AI 请求时通过请求头发给后端。</li>
-                      <li>启用通知提醒（Telegram / Discord / 飞书）后，提醒消息中的药品名称、到期日期和状态会发送到对应平台的 API 和你绑定的会话或频道。</li>
-                    </ul>
-                  </div>
-                </section>
-
-                <section className="rounded-[12px] border border-status-warn/20 bg-status-warn-bg/50 p-3 sm:p-3.5">
-                  <div className="flex items-start gap-2.5">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-status-warn" strokeWidth={1.8} />
-                    <div>
-                      <div className="text-[12px] font-semibold text-ink">风险提示与免责声明</div>
-                      <ul className="mt-1.5 space-y-1 text-[12px] leading-[1.65] text-ink2">
-                        <li>本应用和 AI 输出仅用于库存整理、有效期追踪和基于已录入信息的检索，不提供医疗服务，也不构成诊断、处方或个体化用药建议。</li>
-                        <li>系统不会自动保证识别结果、药品功效匹配、剂量、相互作用、禁忌症、适应证或过敏风险的完整与准确，用药前请务必核对药盒和说明书。</li>
-                        <li>儿童、孕妇、老人、慢性病患者、多药并用者，或症状较重、持续不缓解者，不应仅依赖本应用或 AI 自行决策，请咨询医生或药师。</li>
-                        <li>出现高热不退、剧烈疼痛、呼吸困难、胸痛、抽搐、明显过敏反应等情况，请立即就医或寻求急救帮助。</li>
-                        <li>因录入错误、模型偏差、提醒延迟、第三方服务处理或自行用药产生的风险与后果，由使用者自行判断并承担。</li>
-                      </ul>
-                    </div>
-                  </div>
-                </section>
-              </>
             ) : activeTab === 'notifications' ? (
               <>
                 {/* Channel sub-tabs */}
@@ -1400,48 +1438,110 @@ export function SettingsModal({
                   </div>
                 </section>
               </>
+            ) : activeTab === 'privacy' ? (
+              <div className="space-y-5">
+                <ul className="space-y-3 text-[13px] leading-[1.7] text-ink2">
+                  <li className="flex gap-2.5">
+                    <span className="mt-2 block h-1.5 w-1.5 shrink-0 rounded-full bg-status-ok/60" />
+                    药箱数据默认保存在当前部署环境的 SQLite 中；未启用 AI 和通知时不会主动发送到外部服务。
+                  </li>
+                  <li className="flex gap-2.5">
+                    <span className="mt-2 block h-1.5 w-1.5 shrink-0 rounded-full bg-status-ok/60" />
+                    使用 AI 解析、拍照识别或问答时，输入文本、图片，以及 AI 问答所需的当前药箱数据会发送到你配置的模型接口。
+                  </li>
+                  <li className="flex gap-2.5">
+                    <span className="mt-2 block h-1.5 w-1.5 shrink-0 rounded-full bg-status-ok/60" />
+                    浏览器设置里填写的 AI Base URL、API Key 和模型名会保存在当前浏览器的 localStorage 中，并在每次 AI 请求时通过请求头发给后端。
+                  </li>
+                  <li className="flex gap-2.5">
+                    <span className="mt-2 block h-1.5 w-1.5 shrink-0 rounded-full bg-status-ok/60" />
+                    启用通知提醒（Telegram / Discord / 飞书）后，提醒消息中的药品名称、到期日期和状态会发送到对应平台的 API 和你绑定的会话或频道。
+                  </li>
+                </ul>
+              </div>
+            ) : activeTab === 'disclaimer' ? (
+              <div className="space-y-5">
+
+                <ul className="space-y-3 text-[13px] leading-[1.7] text-ink2">
+                  <li className="flex gap-2.5">
+                    <span className="mt-2 block h-1.5 w-1.5 shrink-0 rounded-full bg-status-warn/60" />
+                    本应用和 AI 输出仅用于库存整理、有效期追踪和基于已录入信息的检索，不提供医疗服务，也不构成诊断、处方或个体化用药建议。
+                  </li>
+                  <li className="flex gap-2.5">
+                    <span className="mt-2 block h-1.5 w-1.5 shrink-0 rounded-full bg-status-warn/60" />
+                    系统不会自动保证识别结果、药品功效匹配、剂量、相互作用、禁忌症、适应证或过敏风险的完整与准确，用药前请务必核对药盒和说明书。
+                  </li>
+                  <li className="flex gap-2.5">
+                    <span className="mt-2 block h-1.5 w-1.5 shrink-0 rounded-full bg-status-warn/60" />
+                    儿童、孕妇、老人、慢性病患者、多药并用者，或症状较重、持续不缓解者，不应仅依赖本应用或 AI 自行决策，请咨询医生或药师。
+                  </li>
+                  <li className="flex gap-2.5">
+                    <span className="mt-2 block h-1.5 w-1.5 shrink-0 rounded-full bg-status-warn/60" />
+                    出现高热不退、剧烈疼痛、呼吸困难、胸痛、抽搐、明显过敏反应等情况，请立即就医或寻求急救帮助。
+                  </li>
+                  <li className="flex gap-2.5">
+                    <span className="mt-2 block h-1.5 w-1.5 shrink-0 rounded-full bg-status-warn/60" />
+                    因录入错误、模型偏差、提醒延迟、第三方服务处理或自行用药产生的风险与后果，由使用者自行判断并承担。
+                  </li>
+                </ul>
+              </div>
             ) : (
-              <>
-                <section className={sectionClass}>
-                  <div className={sectionTitleClass}>业务时区</div>
-                  <div className="space-y-3">
-                    <div className="rounded-[10px] border border-border/60 bg-surface3 px-3 py-2.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[12px] font-medium text-ink">{timezone}</span>
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                            timezoneConfigured
-                              ? 'bg-status-ok-bg text-status-ok'
-                              : 'bg-status-warn-bg text-status-warn'
-                          }`}
-                        >
-                          {timezoneConfigured ? '已配置' : '自动回退'}
-                        </span>
-                        {timezoneLoading && (
-                          <span className="text-[11px] text-ink3">加载中...</span>
+              <div className="space-y-7">
+                {/* 业务时区 */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-ink3" strokeWidth={1.8} />
+                    <span className="text-[14px] font-semibold text-ink">业务时区</span>
+                  </div>
+                  <div className="rounded-[12px] border border-border/50 bg-surface px-4 py-3.5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[16px] font-semibold text-ink">{timezone}</span>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                              timezoneConfigured
+                                ? 'bg-status-ok-bg text-status-ok'
+                                : 'bg-status-warn-bg text-status-warn'
+                            }`}
+                          >
+                            {timezoneConfigured ? '已激活' : '自动回退'}
+                          </span>
+                          {timezoneLoading && (
+                            <span className="text-[11px] text-ink3">加载中...</span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-[12px] leading-[1.5] text-ink2">
+                          影响过期判断、AI 问答及每日提醒发送时间。
+                        </p>
+                        {timezoneLoadError && (
+                          <div className="mt-1.5 text-[12px] text-status-danger">
+                            {timezoneLoadError}
+                          </div>
                         )}
                       </div>
-                      <p className="mt-2 text-[11px] leading-4 text-ink2">
-                        这个时区会同时影响过期判断、AI 问答里的“今天”以及每日提醒发送时间。
-                      </p>
-                      {timezoneLoadError && (
-                        <div className="mt-2 text-[12px] text-status-danger">{timezoneLoadError}</div>
-                      )}
+                      <div className="flex shrink-0 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleTimezoneAutoDetect()}
+                          disabled={timezoneSaving}
+                          className={secondaryButtonClass}
+                        >
+                          {timezoneSaving ? '检测中...' : '自动检测'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTimezoneEditing((v) => !v)}
+                          className={primaryButtonClass}
+                        >
+                          修改时区
+                        </button>
+                      </div>
                     </div>
+                  </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void handleTimezoneAutoDetect()}
-                        disabled={timezoneSaving}
-                        className={secondaryButtonClass}
-                      >
-                        {timezoneSaving ? '保存中...' : '自动检测当前浏览器时区'}
-                      </button>
-                    </div>
-
-                    <div>
-                      <div className={fieldLabelClass}>选择时区</div>
+                  {timezoneEditing && (
+                    <div className="space-y-2">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                         <select
                           value={timezoneInput}
@@ -1454,142 +1554,179 @@ export function SettingsModal({
                             </option>
                           ))}
                         </select>
-                        <button
-                          type="button"
-                          onClick={() => void handleTimezoneSave(timezoneInput)}
-                          disabled={timezoneSaving}
-                          className={`${primaryButtonClass} sm:shrink-0`}
-                        >
-                          {timezoneSaving ? '保存中...' : '保存时区'}
-                        </button>
+                        <div className="flex shrink-0 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleTimezoneSave(timezoneInput)}
+                            disabled={timezoneSaving}
+                            className={primaryButtonClass}
+                          >
+                            {timezoneSaving ? '保存中...' : '保存'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTimezoneEditing(false)}
+                            className={secondaryButtonClass}
+                          >
+                            取消
+                          </button>
+                        </div>
                       </div>
-                      <p className="mt-2 text-[11px] leading-4 text-ink2">
-                        下拉中已汇集常见和完整时区列表；如果不确定，直接使用“自动检测当前浏览器时区”即可。
-                      </p>
-                      {timezoneStatus && (
-                        <div className="mt-2 text-[12px] text-status-ok">{timezoneStatus}</div>
-                      )}
-                      {timezoneError && (
-                        <div className="mt-2 text-[12px] text-status-danger">{timezoneError}</div>
-                      )}
                     </div>
-                  </div>
-                </section>
+                  )}
+                  {timezoneStatus && (
+                    <div className="text-[12px] text-status-ok">{timezoneStatus}</div>
+                  )}
+                  {timezoneError && (
+                    <div className="text-[12px] text-status-danger">{timezoneError}</div>
+                  )}
+                </div>
 
-                <section className={sectionClass}>
-                  <div className={sectionTitleClass}>显示偏好</div>
-                  <div className="space-y-3">
+                {/* 显示偏好 */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Monitor className="h-4 w-4 text-ink3" strokeWidth={1.8} />
+                    <span className="text-[14px] font-semibold text-ink">显示偏好</span>
+                  </div>
+
+                  <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
                     <div>
                       <div className={fieldLabelClass}>外观主题</div>
-                      <div className="grid gap-2 sm:grid-cols-3">
-                        {themeOptions.map((option) => (
+                      <div className="inline-flex rounded-[10px] border border-border/50 bg-surface4 p-[3px]">
+                        {themeOptions.map((option) => {
+                          const ThemeIcon = themeIconMap[option.value];
+                          const isSelected = form.themePreference === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() =>
+                                setForm((current) => ({
+                                  ...current,
+                                  themePreference: option.value,
+                                }))
+                              }
+                              className={`flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-[12px] font-medium transition-all duration-200 ${
+                                isSelected
+                                  ? 'theme-panel border border-border/60 text-ink shadow-sm'
+                                  : 'border border-transparent text-ink2 hover:text-ink'
+                              }`}
+                            >
+                              <ThemeIcon className="h-3.5 w-3.5" strokeWidth={1.8} />
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className={fieldLabelClass}>默认主页</div>
+                      <div className="inline-flex rounded-[10px] border border-border/50 bg-surface4 p-[3px]">
+                        {homeTabOptions.map((option) => {
+                          const isSelected = form.defaultHomeTab === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() =>
+                                setForm((current) => ({
+                                  ...current,
+                                  defaultHomeTab: option.value,
+                                }))
+                              }
+                              className={`rounded-[8px] px-3 py-1.5 text-[12px] font-medium transition-all duration-200 ${
+                                isSelected
+                                  ? 'theme-panel border border-border/60 text-ink shadow-sm'
+                                  : 'border border-transparent text-ink2 hover:text-ink'
+                              }`}
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className={fieldLabelClass}>列表默认视图</div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {listViewOptions.map((option) => {
+                        const ViewIcon = listViewIconMap[option.value];
+                        const isSelected = form.defaultListView === option.value;
+                        return (
                           <button
                             key={option.value}
                             type="button"
                             onClick={() =>
                               setForm((current) => ({
                                 ...current,
-                                themePreference: option.value,
+                                defaultListView: option.value,
                               }))
                             }
-                            className={`${optionCardClass} ${getOptionCardStateClass(
-                              form.themePreference === option.value,
-                            )}`}
-                          >
-                            <div className="text-[12px] font-medium text-ink">{option.label}</div>
-                            <div className="mt-0.5 text-[11px] leading-[1.35] text-ink2">
-                              {option.description}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                      <p className="mt-2 text-[11px] leading-4 text-ink2">
-                        当前生效：{resolvedTheme === 'dark' ? '暗色' : '浅色'}
-                        {form.themePreference === 'system' ? '（跟随系统）' : ''}
-                      </p>
-                    </div>
-
-                    <div>
-                      <div className={fieldLabelClass}>默认进入页面</div>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {homeTabOptions.map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() =>
-                              setForm((current) => ({ ...current, defaultHomeTab: option.value }))
-                            }
-                            className={`${optionCardClass} ${getOptionCardStateClass(
-                              form.defaultHomeTab === option.value,
-                            )}`}
-                          >
-                            <div className="text-[12px] font-medium text-ink">{option.label}</div>
-                            <div className="mt-0.5 text-[11px] leading-[1.35] text-ink2">
-                              {option.description}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className={fieldLabelClass}>药品列表默认视图</div>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {listViewOptions.map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() =>
-                              setForm((current) => ({ ...current, defaultListView: option.value }))
-                            }
-                            className={`${optionCardClass} ${getOptionCardStateClass(
-                              form.defaultListView === option.value,
-                            )}`}
-                          >
-                            <div className="text-[12px] font-medium text-ink">{option.label}</div>
-                            <div className="mt-0.5 text-[11px] leading-[1.35] text-ink2">
-                              {option.description}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                <section className={sectionClass}>
-                  <div className={sectionTitleClass}>提醒规则</div>
-                  <div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {reminderDayOptions.map((days) => {
-                        const isSelected = form.expiringDays === days;
-
-                        return (
-                          <button
-                            key={days}
-                            type="button"
-                            onClick={() =>
-                              setForm((current) => ({ ...current, expiringDays: days }))
-                            }
-                            className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-all duration-200 ${
+                            className={`flex items-center gap-3 rounded-[10px] border px-3 py-2.5 text-left transition-all duration-200 ${
                               isSelected
-                                ? 'bg-accent text-white shadow-sm'
-                                : 'border border-border/60 bg-surface text-ink2 hover:border-border-strong/80 hover:text-ink'
+                                ? 'border-accent/30 bg-accent/5'
+                                : 'border-border/60 bg-surface hover:border-border-strong/80'
                             }`}
                           >
-                            {days} 天
+                            <div
+                              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] transition-colors ${
+                                isSelected
+                                  ? 'bg-accent/15 text-accent'
+                                  : 'bg-surface3 text-ink3'
+                              }`}
+                            >
+                              <ViewIcon className="h-4 w-4" strokeWidth={1.8} />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[12px] font-medium text-ink">
+                                {option.label}
+                              </div>
+                              <div className="text-[11px] leading-[1.35] text-ink2">
+                                {option.description}
+                              </div>
+                            </div>
                           </button>
                         );
                       })}
                     </div>
-                    <p className="mt-2 text-[11px] leading-4 text-ink2">
-                      用于定义哪些药品会被归类为“即将过期”。
-                    </p>
                   </div>
-                </section>
+                </div>
 
-                <section className={sectionClass}>
-                  <div className={sectionTitleClass}>数据管理</div>
+                {/* 即将过期判定 */}
+                <div className="space-y-2">
+                  <div className="text-[13px] font-semibold text-ink">即将过期判定</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {reminderDayOptions.map((days) => {
+                      const isSelected = form.expiringDays === days;
+                      return (
+                        <button
+                          key={days}
+                          type="button"
+                          onClick={() =>
+                            setForm((current) => ({ ...current, expiringDays: days }))
+                          }
+                          className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-all duration-200 ${
+                            isSelected
+                              ? 'bg-accent text-white shadow-sm'
+                              : 'border border-border/60 bg-surface text-ink2 hover:border-border-strong/80 hover:text-ink'
+                          }`}
+                        >
+                          {days} 天
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] leading-4 text-ink2">
+                    有效期在此天数内的药品会被标记为“即将过期”。
+                  </p>
+                </div>
+
+                {/* 数据管理 */}
+                <div className="space-y-2">
+                  <div className="text-[13px] font-semibold text-ink">数据管理</div>
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -1599,7 +1736,6 @@ export function SettingsModal({
                     >
                       导出数据
                     </button>
-
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
@@ -1608,7 +1744,6 @@ export function SettingsModal({
                     >
                       导入数据
                     </button>
-
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -1617,27 +1752,30 @@ export function SettingsModal({
                       onChange={(event) => void handleImport(event.target.files?.[0])}
                     />
                   </div>
-                </section>
-              </>
+                </div>
+              </div>
+
             )}
           </div>
-        </div>
 
-        {status && <div className="mt-3 text-[13px] text-status-ok">{status}</div>}
-        {testStatus && <div className="mt-1.5 text-[13px] text-status-ok">{testStatus}</div>}
-        {error && <div className="mt-1.5 text-[13px] text-status-danger">{error}</div>}
-
-        <div className="mt-4 flex justify-end gap-2 border-t border-border/40 pt-3">
-          <button
-            type="button"
-            onClick={() => {
-              updateSettings(form);
-              onClose();
-            }}
-            className={primaryButtonClass}
-          >
-            保存
-          </button>
+          {/* Footer */}
+          <div className="shrink-0 border-t border-border/40 px-4 py-3">
+            {status && <div className="mb-2 text-[12px] text-status-ok">{status}</div>}
+            {testStatus && <div className="mb-2 text-[12px] text-status-ok">{testStatus}</div>}
+            {error && <div className="mb-2 text-[12px] text-status-danger">{error}</div>}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  updateSettings(form);
+                  onClose();
+                }}
+                className={primaryButtonClass}
+              >
+                保存
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
