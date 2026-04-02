@@ -22,6 +22,7 @@ import {
 import type { Medicine, Settings } from '../types';
 import { compressImage } from '../lib/utils';
 import { DismissibleNotice } from './DismissibleNotice';
+import { SelectMenu } from './SelectMenu';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -590,11 +591,22 @@ function Field({
   label,
   children,
   span = 'col-span-1',
+  interactive = false,
 }: {
   label: string;
   children: ReactNode;
   span?: string;
+  interactive?: boolean;
 }) {
+  if (interactive) {
+    return (
+      <div className={`${span} block`}>
+        <div className="mb-1 text-[11px] font-medium text-ink2">{label}</div>
+        {children}
+      </div>
+    );
+  }
+
   return (
     <label className={`${span} block`}>
       <div className="mb-1 text-[11px] font-medium text-ink2">{label}</div>
@@ -618,6 +630,10 @@ function DraftFields({
     draft.category && !categories.includes(draft.category)
       ? [...categories, draft.category]
       : categories;
+  const categorySelectOptions = [
+    { value: '', label: '请选择分类' },
+    ...categoryOptions.map((cat) => ({ value: cat, label: cat })),
+  ];
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -670,19 +686,15 @@ function DraftFields({
         />
       </Field>
 
-      <Field label="分类">
-        <select
+      <Field label="分类" interactive>
+        <SelectMenu
           value={draft.category}
-          onChange={(e) => onChange('category', e.target.value)}
-          className={baseInputClasses(Boolean(flashFields?.has('category')))}
-        >
-          <option value="">请选择分类</option>
-          {categoryOptions.map((cat) => (
-            <option key={cat} value={cat}>
-              {cat}
-            </option>
-          ))}
-        </select>
+          options={categorySelectOptions}
+          onChange={(value) => onChange('category', value)}
+          placeholder="请选择分类"
+          ariaLabel="分类"
+          buttonClassName={baseInputClasses(Boolean(flashFields?.has('category')))}
+        />
       </Field>
 
       <Field label="用途/适应症" span="sm:col-span-2">
@@ -720,6 +732,10 @@ function CompactEditForm({
     draft.category && !categories.includes(draft.category)
       ? [...categories, draft.category]
       : categories;
+  const categorySelectOptions = [
+    { value: '', label: '请选择分类' },
+    ...categoryOptions.map((cat) => ({ value: cat, label: cat })),
+  ];
 
   return (
     <div className="mx-auto w-full max-w-[720px] space-y-4">
@@ -765,19 +781,15 @@ function CompactEditForm({
             />
           </Field>
 
-          <Field label="分类">
-            <select
+          <Field label="分类" interactive>
+            <SelectMenu
               value={draft.category}
-              onChange={(e) => onChange('category', e.target.value)}
-              className={baseInputClasses(Boolean(flashFields?.has('category')))}
-            >
-              <option value="">请选择分类</option>
-              {categoryOptions.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
+              options={categorySelectOptions}
+              onChange={(value) => onChange('category', value)}
+              placeholder="请选择分类"
+              ariaLabel="分类"
+              buttonClassName={baseInputClasses(Boolean(flashFields?.has('category')))}
+            />
           </Field>
 
           <Field label="存放位置" span="sm:col-span-2">

@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 import { useTimezone } from '../hooks/useTimezone';
 import { daysUntilExpiry, formatDate, getMedicineStatus, getStatusText } from '../lib/utils';
 import type { Medicine } from '../types';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface MedicineDetailModalProps {
   medicine: Medicine | null;
@@ -86,6 +87,7 @@ export function MedicineDetailModal({
 }: MedicineDetailModalProps) {
   const { timezone } = useTimezone();
   const [deleting, setDeleting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -97,7 +99,7 @@ export function MedicineDetailModal({
     document.body.style.overflow = 'hidden';
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !confirmOpen) {
         onClose();
       }
     };
@@ -108,10 +110,11 @@ export function MedicineDetailModal({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [medicine, onClose]);
+  }, [confirmOpen, medicine, onClose]);
 
   useEffect(() => {
     setDeleting(false);
+    setConfirmOpen(false);
     setError('');
   }, [medicine?.id]);
 
@@ -123,11 +126,7 @@ export function MedicineDetailModal({
   const days = medicine.expires_at ? daysUntilExpiry(medicine.expires_at, timezone) : undefined;
   const styles = getStatusClasses(status);
 
-  const handleDelete = async () => {
-    if (!window.confirm(`确认删除「${medicine.name}」吗？`)) {
-      return;
-    }
-
+  const handleDeleteConfirm = async () => {
     setDeleting(true);
     setError('');
 
@@ -135,6 +134,7 @@ export function MedicineDetailModal({
       await onDelete(medicine);
       onClose();
     } catch (err) {
+      setConfirmOpen(false);
       setError(err instanceof Error ? err.message : '删除失败');
     } finally {
       setDeleting(false);
@@ -229,7 +229,7 @@ export function MedicineDetailModal({
 
             <button
               type="button"
-              onClick={() => void handleDelete()}
+              onClick={() => setConfirmOpen(true)}
               disabled={deleting}
               className="rounded-lg border border-status-danger/25 bg-status-danger-bg/55 px-4 py-2 text-[13px] font-medium text-status-danger transition-all hover:bg-status-danger-bg/75 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -238,6 +238,18 @@ export function MedicineDetailModal({
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title={`确认删除「${medicine.name}」吗？`}
+        description="删除后这条药品记录会从当前药箱中移除，相关到期提醒和查询结果也不会再显示。"
+        confirmLabel="确认删除"
+        cancelLabel="先保留"
+        tone="danger"
+        loading={deleting}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={handleDeleteConfirm}
+      />
     </div>
   );
 }

@@ -69,4 +69,43 @@ describe('AddModal', () => {
       ),
     );
   });
+
+  it('submits the selected category from the custom select', async () => {
+    vi.mocked(api.getCategories).mockResolvedValue(['感冒发烧', '外伤处理']);
+
+    const onCreate = vi.fn().mockResolvedValue(undefined);
+    const onUpdate = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <AddModal
+        open
+        onClose={vi.fn()}
+        settings={settings}
+        onCreate={onCreate}
+        onUpdate={onUpdate}
+      />,
+    );
+
+    await waitFor(() => expect(api.getCategories).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole('button', { name: '直接手动填写' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '分类' }));
+    fireEvent.click(screen.getByRole('option', { name: '外伤处理' }));
+
+    fireEvent.change(screen.getByLabelText('药品名称'), {
+      target: { value: '创可贴' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '确认添加' }));
+
+    await waitFor(() =>
+      expect(onCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: '创可贴',
+          category: '外伤处理',
+        }),
+      ),
+    );
+  });
 });

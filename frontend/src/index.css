@@ -133,12 +133,28 @@ select {
   }
 }
 
+@keyframes dropdownRise {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .animate-overlayFade {
   animation: overlayFade 180ms ease-out forwards;
 }
 
 .animate-modalPop {
   animation: modalPop 220ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.animate-dropdownRise {
+  animation: dropdownRise 160ms ease-out forwards;
 }
 
 ::selection {
@@ -191,6 +207,71 @@ select {
 
   .theme-input:focus {
     border-color: rgb(var(--color-accent));
+  }
+
+  .theme-select-trigger {
+    border-color: rgb(var(--color-border));
+    background: rgb(var(--color-surface));
+    color: rgb(var(--color-ink));
+  }
+
+  .theme-select-trigger:hover:not(:disabled) {
+    border-color: rgb(var(--color-border-strong) / 0.9);
+    background: rgb(var(--color-surface-3));
+  }
+
+  .theme-select-trigger:focus-visible {
+    outline: none;
+    border-color: rgb(var(--color-accent));
+    box-shadow: 0 0 0 3px rgb(var(--color-accent) / 0.12);
+  }
+
+  .theme-select-trigger:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .theme-select-panel {
+    border-color: rgb(var(--color-border) / 0.7);
+    background: rgb(var(--color-surface));
+    box-shadow: var(--shadow-panel);
+  }
+
+  .theme-select-option {
+    color: rgb(var(--color-ink-2));
+  }
+
+  .theme-select-option:hover {
+    background: rgb(var(--color-surface-3));
+    color: rgb(var(--color-ink));
+  }
+
+  .theme-select-option-active {
+    background: rgb(var(--color-surface-2));
+    color: rgb(var(--color-ink));
+  }
+
+  .theme-select-option-selected {
+    background: rgb(var(--color-accent) / 0.1);
+    color: rgb(var(--color-ink));
+  }
+
+  .theme-select-search {
+    border-color: rgb(var(--color-border) / 0.8);
+    background: rgb(var(--color-surface-3));
+  }
+
+  .theme-select-search:focus-within {
+    border-color: rgb(var(--color-accent));
+    box-shadow: 0 0 0 3px rgb(var(--color-accent) / 0.1);
+  }
+
+  .theme-select-section-label {
+    color: rgb(var(--color-ink-3));
+  }
+
+  .theme-select-empty {
+    color: rgb(var(--color-ink-3));
   }
 
   .theme-button-secondary {

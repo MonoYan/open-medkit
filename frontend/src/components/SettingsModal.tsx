@@ -47,6 +47,8 @@ import type {
   TelegramChannelConfig,
 } from '../types';
 import { DismissibleNotice } from './DismissibleNotice';
+import { ComboboxSelect } from './ComboboxSelect';
+import { SelectMenu } from './SelectMenu';
 
 const homeTabOptions = [
   { value: 'ai', label: 'AI 检索', description: '打开应用后直接进入对话问答。' },
@@ -77,30 +79,31 @@ const notifyHourOptions = Array.from({ length: 24 }, (_, i) => i);
 type SettingsTab = 'ai' | 'general' | 'notifications' | 'about' | 'privacy' | 'disclaimer';
 type NotifyChannel = 'telegram' | 'discord' | 'feishu';
 
+const COMMON_TIMEZONES = [
+  'UTC',
+  'Asia/Shanghai',
+  'Asia/Hong_Kong',
+  'Asia/Tokyo',
+  'Asia/Singapore',
+  'Asia/Seoul',
+  'Australia/Sydney',
+  'Europe/London',
+  'Europe/Berlin',
+  'Europe/Paris',
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'America/Vancouver',
+] as const;
+
 function getAllTimezoneOptions() {
-  const fallback = [
-    'UTC',
-    'Asia/Shanghai',
-    'Asia/Hong_Kong',
-    'Asia/Tokyo',
-    'Asia/Singapore',
-    'Asia/Seoul',
-    'Australia/Sydney',
-    'Europe/London',
-    'Europe/Berlin',
-    'Europe/Paris',
-    'America/New_York',
-    'America/Chicago',
-    'America/Denver',
-    'America/Los_Angeles',
-    'America/Vancouver',
-  ];
   const intlWithSupportedValues = Intl as typeof Intl & {
     supportedValuesOf?: (key: string) => string[];
   };
 
   if (typeof intlWithSupportedValues.supportedValuesOf !== 'function') {
-    return fallback;
+    return [...COMMON_TIMEZONES];
   }
 
   const supported = intlWithSupportedValues.supportedValuesOf('timeZone');
@@ -108,6 +111,14 @@ function getAllTimezoneOptions() {
 }
 
 const allTimezoneOptions = getAllTimezoneOptions();
+const notifyHourSelectOptions = notifyHourOptions.map((hour) => ({
+  value: hour,
+  label: `${String(hour).padStart(2, '0')}:00`,
+}));
+const featuredTimezoneOptions = COMMON_TIMEZONES.map((timezone) => ({
+  value: timezone,
+  label: timezone,
+}));
 
 const tabDescriptions: Record<SettingsTab, string> = {
   ai: '配置 AI 服务地址、模型和回答风格。留空时优先使用服务端 .env 中的默认值。',
@@ -188,6 +199,11 @@ export function SettingsModal({
   const timezoneSelectOptions = allTimezoneOptions.includes(timezoneInput)
     ? allTimezoneOptions
     : [timezoneInput, ...allTimezoneOptions];
+  const timezoneSelectItems = timezoneSelectOptions.map((option) => ({
+    value: option,
+    label: option,
+    searchText: option.replace(/[/_]/g, ' '),
+  }));
 
   // Telegram notification state
   const [tgChannel, setTgChannel] = useState<NotificationChannel | null>(null);
@@ -948,17 +964,14 @@ export function SettingsModal({
                           {tgEnabled && (
                             <div>
                               <div className={fieldLabelClass}>每日发送时间</div>
-                              <select
+                              <SelectMenu
                                 value={tgNotifyHour}
-                                onChange={(e) => void handleTgHourChange(Number(e.target.value))}
-                                className={`${inputClass} max-w-[160px]`}
-                              >
-                                {notifyHourOptions.map((h) => (
-                                  <option key={h} value={h}>
-                                    {String(h).padStart(2, '0')}:00
-                                  </option>
-                                ))}
-                              </select>
+                                options={notifyHourSelectOptions}
+                                onChange={(hour) => void handleTgHourChange(hour)}
+                                ariaLabel="Telegram 每日发送时间"
+                                className="max-w-[160px]"
+                                buttonClassName={inputClass}
+                              />
                               <p className="mt-1.5 text-[11px] leading-4 text-ink2">
                                 每天按药箱时区 {timezone} 的此时间检查并发送提醒。
                               </p>
@@ -1087,17 +1100,14 @@ export function SettingsModal({
                           {dcEnabled && (
                             <div>
                               <div className={fieldLabelClass}>每日发送时间</div>
-                              <select
+                              <SelectMenu
                                 value={dcNotifyHour}
-                                onChange={(e) => void handleDcHourChange(Number(e.target.value))}
-                                className={`${inputClass} max-w-[160px]`}
-                              >
-                                {notifyHourOptions.map((h) => (
-                                  <option key={h} value={h}>
-                                    {String(h).padStart(2, '0')}:00
-                                  </option>
-                                ))}
-                              </select>
+                                options={notifyHourSelectOptions}
+                                onChange={(hour) => void handleDcHourChange(hour)}
+                                ariaLabel="Discord 每日发送时间"
+                                className="max-w-[160px]"
+                                buttonClassName={inputClass}
+                              />
                               <p className="mt-1.5 text-[11px] leading-4 text-ink2">
                                 每天按药箱时区 {timezone} 的此时间检查并发送提醒。
                               </p>
@@ -1203,17 +1213,14 @@ export function SettingsModal({
                           {fsEnabled && (
                             <div>
                               <div className={fieldLabelClass}>每日发送时间</div>
-                              <select
+                              <SelectMenu
                                 value={fsNotifyHour}
-                                onChange={(e) => void handleFsHourChange(Number(e.target.value))}
-                                className={`${inputClass} max-w-[160px]`}
-                              >
-                                {notifyHourOptions.map((h) => (
-                                  <option key={h} value={h}>
-                                    {String(h).padStart(2, '0')}:00
-                                  </option>
-                                ))}
-                              </select>
+                                options={notifyHourSelectOptions}
+                                onChange={(hour) => void handleFsHourChange(hour)}
+                                ariaLabel="飞书 每日发送时间"
+                                className="max-w-[160px]"
+                                buttonClassName={inputClass}
+                              />
                               <p className="mt-1.5 text-[11px] leading-4 text-ink2">
                                 每天按药箱时区 {timezone} 的此时间检查并发送提醒。
                               </p>
@@ -1543,17 +1550,17 @@ export function SettingsModal({
                   {timezoneEditing && (
                     <div className="space-y-2">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <select
+                        <ComboboxSelect
                           value={timezoneInput}
-                          onChange={(event) => setTimezoneInput(event.target.value)}
-                          className={inputClass}
-                        >
-                          {timezoneSelectOptions.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
+                          options={timezoneSelectItems}
+                          featuredOptions={featuredTimezoneOptions}
+                          onChange={(nextTimezone) => setTimezoneInput(nextTimezone)}
+                          ariaLabel="选择业务时区"
+                          searchPlaceholder="搜索时区，如 Asia/Shanghai"
+                          emptyMessage="没有找到匹配的时区"
+                          className="flex-1"
+                          buttonClassName={inputClass}
+                        />
                         <div className="flex shrink-0 gap-2">
                           <button
                             type="button"
