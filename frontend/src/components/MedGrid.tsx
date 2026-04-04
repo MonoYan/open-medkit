@@ -302,11 +302,83 @@ export function MedGrid({
         </div>
       ) : (
         <div className="p-4 md:p-5">
-          <table className="w-full text-left text-[13px]">
+          {/* Mobile: card-based list */}
+          <div className="flex flex-col gap-2 sm:hidden">
+            {sortedMedicines.map((medicine) => {
+              const status = getMedicineStatus(medicine.expires_at, timezone, expiringDays);
+              const days = medicine.expires_at
+                ? daysUntilExpiry(medicine.expires_at, timezone)
+                : undefined;
+              const badgeClass =
+                status === 'expired'
+                  ? 'bg-status-danger-bg text-status-danger'
+                  : status === 'expiring'
+                    ? 'bg-status-warn-bg text-status-warn'
+                    : status === 'ok'
+                      ? 'bg-status-ok-bg text-status-ok'
+                      : 'bg-surface2 text-ink2';
+
+              return (
+                <div
+                  key={medicine.id}
+                  onClick={() => onOpenMedicine(medicine)}
+                  className="cursor-pointer rounded-[12px] border border-border/40 bg-surface px-3.5 py-2.5 transition-colors active:bg-surface3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-ink">
+                      {medicine.name}
+                    </span>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium leading-normal ${badgeClass}`}>
+                      {getStatusText(status, days)}
+                    </span>
+                  </div>
+
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 flex-1 items-center gap-x-2 text-[11px] text-ink3">
+                      <span className="shrink-0 font-mono text-ink2">{formatDate(medicine.expires_at)}</span>
+                      {medicine.spec && (
+                        <>
+                          <span className="h-2.5 w-px bg-border/60" aria-hidden="true" />
+                          <span className="truncate font-mono">{medicine.spec}</span>
+                        </>
+                      )}
+                      {medicine.quantity && (
+                        <>
+                          <span className="h-2.5 w-px bg-border/60" aria-hidden="true" />
+                          <span className="shrink-0">{medicine.quantity}</span>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center">
+                      <button
+                        type="button"
+                        title="编辑"
+                        onClick={(e) => { e.stopPropagation(); onEditMedicine(medicine); }}
+                        className="-mr-1 rounded-md p-1.5 text-ink3 transition-colors hover:bg-surface4 hover:text-ink"
+                      >
+                        <Pencil className="h-3.5 w-3.5" strokeWidth={1.8} />
+                      </button>
+                      <button
+                        type="button"
+                        title="删除"
+                        onClick={(e) => { e.stopPropagation(); onDeleteMedicine(medicine); }}
+                        className="-mr-1.5 rounded-md p-1.5 text-ink3 transition-colors hover:bg-status-danger-bg hover:text-status-danger"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop: table */}
+          <table className="hidden w-full text-left text-[13px] sm:table">
             <thead>
               <tr className="border-b border-border/40 text-[11px] font-medium uppercase tracking-wider text-ink3">
                 <th className="pb-2.5 pr-3 font-medium">名称</th>
-                <th className="hidden pb-2.5 pr-3 font-medium sm:table-cell">分类</th>
+                <th className="pb-2.5 pr-3 font-medium">分类</th>
                 <th className="pb-2.5 pr-3 font-medium">有效期</th>
                 <th className="pb-2.5 pr-3 font-medium">状态</th>
                 <th className="hidden pb-2.5 pr-3 font-medium md:table-cell">数量</th>
@@ -341,10 +413,10 @@ export function MedGrid({
                         <span className="ml-1.5 font-mono text-[11px] font-normal text-ink3">{medicine.spec}</span>
                       )}
                     </td>
-                    <td className="hidden py-3 pr-3 text-ink2 sm:table-cell">{medicine.category || '—'}</td>
+                    <td className="py-3 pr-3 text-ink2">{medicine.category || '—'}</td>
                     <td className="py-3 pr-3 font-mono text-[12px] text-ink2">{formatDate(medicine.expires_at)}</td>
                     <td className="py-3 pr-3">
-                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium ${badgeClass}`}>
+                      <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-medium ${badgeClass}`}>
                         {getStatusText(status, days)}
                       </span>
                     </td>
