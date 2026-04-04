@@ -13,6 +13,55 @@ const API_BASE = '/api';
 
 type MedicinePayload = Omit<Medicine, 'id' | 'created_at' | 'updated_at'>;
 
+// ---------------------------------------------------------------------------
+// Global 401 (session expired) handler — login endpoints are explicitly excluded
+// ---------------------------------------------------------------------------
+
+const AUTH_PATHS = ['/api/auth/login', '/api/auth/logout'];
+
+let onUnauthenticated: (() => void) | null = null;
+
+export function setOnUnauthenticated(cb: (() => void) | null) {
+  onUnauthenticated = cb;
+}
+
+function emit401IfNeeded(url: string) {
+  if (AUTH_PATHS.some((p) => url.endsWith(p))) return;
+  onUnauthenticated?.();
+}
+
+// ---------------------------------------------------------------------------
+// Auth API
+// ---------------------------------------------------------------------------
+
+export async function getAuthStatus(): Promise<{ requiresAuth: boolean; authenticated: boolean }> {
+  const response = await fetch(`${API_BASE}/auth/status`, { credentials: 'include' });
+  return response.json();
+}
+
+export async function login(password: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error || 'Login failed');
+  }
+}
+
+export async function logout(): Promise<void> {
+  await fetch(`${API_BASE}/auth/logout`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+}
+
+// ---------------------------------------------------------------------------
+
 function buildAiHeaders(settings?: Settings) {
   const headers: HeadersInit = {};
 
@@ -36,12 +85,14 @@ function buildAiHeaders(settings?: Settings) {
 }
 
 async function request<T>(path: string, init?: RequestInit) {
-  const response = await fetch(`${API_BASE}${path}`, init);
+  const url = `${API_BASE}${path}`;
+  const response = await fetch(url, { ...init, credentials: 'include' });
   const contentType = response.headers.get('Content-Type') || '';
   const isJson = contentType.includes('application/json');
   const payload = isJson ? await response.json() : null;
 
   if (!response.ok) {
+    if (response.status === 401) emit401IfNeeded(url);
     const message =
       payload?.error ||
       (payload?.detail ? `${payload.error}: ${payload.detail}` : response.statusText);
@@ -128,9 +179,11 @@ export async function deleteMedicine(id: number) {
 }
 
 export async function exportMedicines() {
-  const response = await fetch(`${API_BASE}/medicines/export`);
+  const url = `${API_BASE}/medicines/export`;
+  const response = await fetch(url, { credentials: 'include' });
 
   if (!response.ok) {
+    if (response.status === 401) emit401IfNeeded(url);
     let message = response.statusText;
 
     try {
@@ -210,7 +263,8 @@ export async function parseMedicineStream(
   onChunk: (content: string) => void,
   signal?: AbortSignal,
 ): Promise<Partial<Medicine>> {
-  const response = await fetch(`${API_BASE}/ai/parse-stream`, {
+  const url = `${API_BASE}/ai/parse-stream`;
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -218,9 +272,11 @@ export async function parseMedicineStream(
     },
     body: JSON.stringify({ text }),
     signal,
+    credentials: 'include',
   });
 
   if (!response.ok) {
+    if (response.status === 401) emit401IfNeeded(url);
     const contentType = response.headers.get('Content-Type') || '';
     if (contentType.includes('application/json')) {
       const payload = await response.json();
@@ -295,7 +351,8 @@ export async function parseMedicineImageStream(
   onChunk: (content: string) => void,
   signal?: AbortSignal,
 ): Promise<Partial<Medicine>> {
-  const response = await fetch(`${API_BASE}/ai/parse-image-stream`, {
+  const url = `${API_BASE}/ai/parse-image-stream`;
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -303,9 +360,11 @@ export async function parseMedicineImageStream(
     },
     body: JSON.stringify({ image: imageDataUrl }),
     signal,
+    credentials: 'include',
   });
 
   if (!response.ok) {
+    if (response.status === 401) emit401IfNeeded(url);
     const contentType = response.headers.get('Content-Type') || '';
     if (contentType.includes('application/json')) {
       const payload = await response.json();
@@ -393,7 +452,8 @@ export async function parseMedicineBatchStream(
   onChunk: (content: string) => void,
   signal?: AbortSignal,
 ): Promise<BatchParseResult> {
-  const response = await fetch(`${API_BASE}/ai/parse-batch-stream`, {
+  const url = `${API_BASE}/ai/parse-batch-stream`;
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -401,9 +461,11 @@ export async function parseMedicineBatchStream(
     },
     body: JSON.stringify({ text }),
     signal,
+    credentials: 'include',
   });
 
   if (!response.ok) {
+    if (response.status === 401) emit401IfNeeded(url);
     const contentType = response.headers.get('Content-Type') || '';
     if (contentType.includes('application/json')) {
       const payload = await response.json();
@@ -500,7 +562,8 @@ export async function queryMedicinesStream(
   onEvent: (event: AiQueryStreamEvent) => void,
   signal?: AbortSignal,
 ): Promise<{ answer: string; medicines: Medicine[] }> {
-  const response = await fetch(`${API_BASE}/ai/query-stream`, {
+  const url = `${API_BASE}/ai/query-stream`;
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -512,9 +575,11 @@ export async function queryMedicinesStream(
       expiringDays: settings.expiringDays,
     }),
     signal,
+    credentials: 'include',
   });
 
   if (!response.ok) {
+    if (response.status === 401) emit401IfNeeded(url);
     const contentType = response.headers.get('Content-Type') || '';
     if (contentType.includes('application/json')) {
       const payload = await response.json();

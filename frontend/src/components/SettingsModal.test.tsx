@@ -24,6 +24,10 @@ vi.mock('../lib/api', () => ({
   verifyTelegramBot: vi.fn(),
 }));
 
+vi.mock('./AuthGate', () => ({
+  useAuth: () => ({ requiresAuth: false, logout: vi.fn() }),
+}));
+
 vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => ({
     timezone: 'UTC',

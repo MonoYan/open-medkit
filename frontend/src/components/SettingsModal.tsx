@@ -46,6 +46,7 @@ import type {
   Settings,
   TelegramChannelConfig,
 } from '../types';
+import { useAuth } from './AuthGate';
 import { DismissibleNotice } from './DismissibleNotice';
 import { ComboboxSelect } from './ComboboxSelect';
 import { SelectMenu } from './SelectMenu';
@@ -160,6 +161,7 @@ export function SettingsModal({
   onImported,
   aiSetupPrompt = null,
 }: SettingsModalProps) {
+  const { requiresAuth, logout } = useAuth();
   const {
     timezone,
     configured: timezoneConfigured,
@@ -1760,6 +1762,19 @@ export function SettingsModal({
                     />
                   </div>
                 </div>
+
+                {requiresAuth && (
+                  <div className="space-y-2">
+                    <div className="text-[13px] font-semibold text-ink">访问控制</div>
+                    <button
+                      type="button"
+                      onClick={() => void logout()}
+                      className={`${secondaryButtonClass} text-status-danger`}
+                    >
+                      退出登录
+                    </button>
+                  </div>
+                )}
               </div>
 
             )}

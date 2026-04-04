@@ -15,6 +15,12 @@ cp .env.example .env
 Edit `.env`:
 
 ```env
+# 访问密码（可选；两个变量都留空则不启用）
+# 推荐：使用 `npm run hash-password -w backend` 生成哈希
+AUTH_PASSWORD_HASH=
+# 或使用明文进行局域网快速部署（不建议用于公网访问）
+# AUTH_PASSWORD=my-secret
+
 AI_API_KEY=sk-your-key-here
 AI_BASE_URL=https://api.openai.com   # or any OpenAI-compatible endpoint
 AI_MODEL=gpt-4o-mini
@@ -161,6 +167,8 @@ npm run build
 export AI_API_KEY=sk-your-key
 export DB_PATH=/path/to/medicine.db
 export NODE_ENV=production
+# 可选：启用访问密码保护
+# export AUTH_PASSWORD_HASH='$argon2id$...'
 
 # Start
 npm run start
@@ -208,15 +216,72 @@ pm2 startup
 
 ---
 
-## Health Check
+## 密码保护
 
-The container includes a built-in health check. You can also use it for external monitoring:
+MedKit 支持使用一个共享密码来保护访问。启用后，所有 API 路由和 Web UI 都需要先登录。
+
+### 生成密码哈希
 
 ```bash
-curl -f http://localhost:3000/api/medicines/stats
+# 在项目根目录执行
+npm run hash-password -w backend
+
+# 或直接传入密码（安全性较低，会出现在 shell 历史中）
+npm run hash-password -w backend -- "my-secret-password"
 ```
 
-Returns `200` with stats JSON when healthy.
+将输出结果（以 `$argon2id$...` 开头）填入 `.env`：
+
+```env
+AUTH_PASSWORD_HASH=$argon2id$v=19$m=65536,t=3,p=4$...
+```
+
+### 明文密码方案（仅限局域网）
+
+如果只是为了快速在局域网中使用，也可以直接使用明文密码：
+
+```env
+AUTH_PASSWORD=my-secret
+```
+
+服务端启动时会打印警告，建议你改用哈希形式。
+
+### 优先级
+
+- `AUTH_PASSWORD_HASH` 的优先级高于 `AUTH_PASSWORD`
+- 两者都为空时，不启用认证（保持向后兼容）
+
+### 登录限流
+
+登录接口带有限流：连续失败 5 次后会锁定 15 分钟。限流键使用 TCP socket 地址。若部署在反向代理后，应用看到的通常是代理的 IP，因此限流会按代理生效，而不是按真实客户端生效。这样做更保守，能阻止暴力破解，但也意味着单个攻击者可能让所有用户一起被锁。公网部署时，请同时在反向代理层增加限流。
+
+---
+
+## 公网安全
+
+**不建议只靠内置密码就将 MedKit 直接暴露到公网。** 公开登录入口配合单个共享密码，对暴力破解的抵抗能力有限。
+
+如果需要公网访问，建议按以下分层方式部署：
+
+1. **必须**：容器只绑定到本机回环地址，例如在 `docker-compose.yml` 中使用 `127.0.0.1:3000:3000`
+2. **必须**：通过反向代理（Nginx/Caddy）提供 HTTPS
+3. **必须**：使用 `AUTH_PASSWORD_HASH`，不要使用明文密码
+4. **强烈建议**：在代理层再加一层认证，例如 Basic Auth、IP 白名单或 Zero Trust（Cloudflare Access、Tailscale Funnel 等）
+5. **强烈建议**：在代理层增加限流（例如 Nginx 的 `limit_req`）
+
+内置密码主要面向可信局域网场景；如果开放公网访问，务必再增加第二层防护。
+
+---
+
+## Health Check
+
+容器内置了 `/api/health` 健康检查接口（无需认证）。你也可以把它用于外部监控：
+
+```bash
+curl -f http://localhost:3000/api/health
+```
+
+服务正常时会返回 `200 {"status":"ok"}`。
 
 ---
 

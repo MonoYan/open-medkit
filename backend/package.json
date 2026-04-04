@@ -7,12 +7,14 @@
     "build": "tsup src/index.ts src/mcp-server.ts --format cjs --dts",
     "start": "node dist/index.js",
     "mcp": "tsx src/mcp-server.ts",
+    "hash-password": "tsx src/hash-password.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.8",
     "@modelcontextprotocol/sdk": "^1.28.0",
+    "argon2": "^0.44.0",
     "better-sqlite3": "^11.8.1",
     "hono": "^4.7.7",
     "undici": "^6.24.1",

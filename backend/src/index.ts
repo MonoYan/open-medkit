@@ -7,10 +7,14 @@ import { cors } from 'hono/cors';
 import { Hono } from 'hono';
 
 import { getDb } from './db/client';
+import { logAuthMode } from './auth/password';
+import { startSessionCleanup } from './auth/session';
+import { authRouter } from './routes/auth';
 import { aiRouter } from './routes/ai';
 import { medicinesRouter } from './routes/medicines';
 import { notificationsRouter } from './routes/notifications';
 import { settingsRouter } from './routes/settings';
+import { authMiddleware } from './middleware/auth';
 import { startNotificationScheduler } from './services/notifier';
 
 const app = new Hono();
@@ -102,6 +106,10 @@ async function serveFile(filePath: string) {
 
 app.use('*', cors());
 
+app.route('/api/auth', authRouter);
+app.get('/api/health', (c) => c.json({ status: 'ok' }));
+app.use('/api/*', authMiddleware);
+
 app.route('/api/medicines', medicinesRouter);
 app.route('/api/ai', aiRouter);
 app.route('/api/notifications', notificationsRouter);
@@ -154,5 +162,7 @@ serve({
   port,
 });
 
+logAuthMode();
+startSessionCleanup();
 startNotificationScheduler();
 console.log(`MedKit server running on port ${port}`);

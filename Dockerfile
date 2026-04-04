@@ -42,7 +42,7 @@ ENV DB_PATH=/data/medicine.db
 ENV NODE_ENV=production
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
-  CMD wget -q --spider http://localhost:3000/api/medicines/stats || exit 1
+  CMD wget -q --spider http://localhost:3000/api/health || exit 1
 
 EXPOSE 3000
 CMD ["node", "dist/index.js"]

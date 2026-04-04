@@ -118,6 +118,11 @@ export default {
           '35%': { opacity: '0.5', transform: 'scale(1)' },
           '100%': { opacity: '0', transform: 'scale(2.2)' },
         },
+        shake: {
+          '0%, 100%': { transform: 'translateX(0)' },
+          '20%, 60%': { transform: 'translateX(-6px)' },
+          '40%, 80%': { transform: 'translateX(6px)' },
+        },
       },
       animation: {
         fadeUp: 'fadeUp 0.45s ease forwards',
@@ -132,6 +137,7 @@ export default {
         searchBarEnter: 'searchBarEnter 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.18s both',
         confettiPop: 'confettiPop 0.65s ease-out both',
         centerGlow: 'centerGlow 0.55s ease-out forwards',
+        shake: 'shake 0.4s ease',
       },
     },
   },
