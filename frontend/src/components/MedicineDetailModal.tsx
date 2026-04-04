@@ -157,8 +157,13 @@ export function MedicineDetailModal({
       <div className="theme-modal-shell relative z-10 flex max-h-[88vh] w-full max-w-[720px] flex-col overflow-hidden rounded-[22px] border animate-modalPop">
         <div className="flex items-start justify-between gap-3 border-b border-border/40 px-5 py-4">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={`h-2.5 w-2.5 rounded-full ${styles.dot}`} aria-hidden="true" />
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h2
+                id="medicine-detail-title"
+                className="text-[25px] font-semibold leading-tight text-ink"
+              >
+                {medicine.name}
+              </h2>
               {medicine.category && (
                 <span className="rounded-full bg-surface2 px-3 py-1 text-[11px] font-medium text-ink2">
                   {medicine.category}
@@ -168,13 +173,6 @@ export function MedicineDetailModal({
                 {getStatusText(status, days)}
               </span>
             </div>
-
-            <h2
-              id="medicine-detail-title"
-              className="mt-3 text-[25px] font-semibold leading-tight text-ink"
-            >
-              {medicine.name}
-            </h2>
 
             {(medicine.name_en || medicine.spec) && (
               <div className="mt-1.5 text-[13px] text-ink2">
